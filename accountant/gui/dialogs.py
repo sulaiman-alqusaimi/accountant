@@ -1,5 +1,7 @@
 import wx
+from utiles import get_events
 from database import add_account, Account, Product, Payment
+
 
 class AccountInfo(wx.Dialog):
 	def __init__(self, *args, **kwargs):
@@ -183,22 +185,20 @@ class EventsHistory(wx.Dialog):
 		p = wx.Panel(self)
 		wx.StaticText(p, -1, "قائمة العمليات: ")
 		self.eventsBox = wx.ListBox(p, -1)
-		events = list(self.account.products)
-		events.extend(self.account.payments)
-		events = sorted(events, key=lambda e: e.date, reverse=True)
+		events = get_events(self.account, True)
 		for event in events:
 			if type(event) == Product:
-				self.eventsBox.Append(f"المنتج: {event.name}. بتاريخ {event.date.strftime('%d/%m/%Y %I:%M %p')}. السعر {event.price}", event)
+				self.eventsBox.Append(f"المنتج: {event.name}. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {event.price}", event)
 			elif type(event) == Payment:
-				self.eventsBox.Append(f"دفع مبلغ. القيمة {event.amount}. بتاريخ {event.date.strftime('%d/%m/%Y %I:%M %p')}", event)
-		editButton = wx.Button(p, -1, "تحرير...")
+				self.eventsBox.Append(f"دفع مبلغ. القيمة {event.amount}. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}", event)
+		self.editButton = wx.Button(p, -1, "تحرير...")
 		cancelButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
-		editButton.SetDefault()
-		editButton.Bind(wx.EVT_BUTTON, self.onEdit)
+		self.editButton.SetDefault()
+		self.editButton.Bind(wx.EVT_BUTTON, self.onEdit)
 		if self.eventsBox.Count > 0:
 			self.eventsBox.Selection = 0
 		else:
-			editButton.Enabled = False
+			self.editButton.Enabled = False
 		self.contextSetup()
 		self.eventsBox.Bind(wx.EVT_CHAR_HOOK, self.onHook)
 		self.Show()
@@ -207,10 +207,10 @@ class EventsHistory(wx.Dialog):
 		data = self.eventsBox.GetClientData(selection)
 		if type(data) == Product:
 			EditProduct(self, self.account, data)
-			self.eventsBox.SetString(selection, f"المنتج: {data.name}. بتاريخ {data.date.strftime('%d/%m/%Y %I:%M %p')}. السعر {data.price}")
+			self.eventsBox.SetString(selection, f"المنتج: {data.name}. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {data.price}")
 		elif type(data) == Payment:
 			EditPaymentDialog(self, self.account, data)
-			self.eventsBox.SetString(selection, f"دفع مبلغ. القيمة {data.amount}. بتاريخ {data.date.strftime('%d/%m/%Y %I:%M %p')}")
+			self.eventsBox.SetString(selection, f"دفع مبلغ. القيمة {data.amount}. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}")
 
 	def contextSetup(self):
 		context = wx.Menu()
@@ -229,7 +229,7 @@ class EventsHistory(wx.Dialog):
 			else:
 				self.account.payments.remove(data)
 				self.account.payments = self.account.payments
-
+			self.editButton.Enabled = self.eventsBox.Count > 0
 
 	def onHook(self, event):
 		if event.KeyCode in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE) and self.eventsBox.Selection != -1:
@@ -256,3 +256,26 @@ class SearchDialog(wx.Dialog):
 		self.Destroy()
 	def onChange(self, event):
 		self.searchButton.Enabled = self.name != ""
+
+
+
+class ResultsDialog(wx.Dialog):
+	def __init__(self, parent, accounts):
+		super().__init__(parent, title="نتائج البحث")
+		self.CenterOnParent()
+		self.account = None
+		p = wx.Panel(self)
+		wx.StaticText(p, -1, "قائمة العملاء: ")
+		self.results = wx.ListBox(p, -1)
+		for account in accounts:
+			self.results.Append(account[1], account)
+		self.results.Selection = 0
+		openButton = wx.Button(p, -1, "اذهب")
+		openButton.SetDefault()
+		cancelButton = wx.Button(p, wx.ID_CANCEL, "العودة إلى النافذة الرئيسية")
+		ه=i=openButton.Bind(wx.EVT_BUTTON, self.onOpen)
+		self.ShowModal()
+
+	def onOpen(self, event):
+		self.account = self.results.GetClientData(self.results.Selection)
+		self.Destroy()

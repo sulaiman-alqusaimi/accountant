@@ -1,9 +1,12 @@
 from .components import BaseFrame
 import wx
 import application
-from .dialogs import NewAccountDialog, EditAccountDialog, SearchDialog
+from .dialogs import NewAccountDialog, EditAccountDialog, ResultsDialog, SearchDialog
 from database import get_accounts, delete_account, Account
 from .account import AccountViewer
+from utiles import check_for_updates
+from threading import Thread
+
 
 
 
@@ -98,13 +101,20 @@ class MainPanel(wx.Panel):
 	def onSearch(self, event):
 		dlg = SearchDialog(self)
 		if dlg.result:
-			for index, account in enumerate(self.accounts.Strings):
-				if dlg.result in account:
-					self.accounts.Selection = index
-					self.accounts.onOpen(None)
-					break
-			else:
+			results = []
+			for account in get_accounts():
+				if dlg.result in account[1]:
+					results.append(account)
+			if not results:
 				wx.MessageBox("لم يتم العثور على العميل المطلوب", "خطأ", wx.ICON_ERROR, self.Parent)
+			else:
+				viewer = ResultsDialog(self.Parent, results)
+				if viewer.account:
+					account = viewer.account
+					position = self.accounts.Strings.index(account[1])
+					self.accounts.Selection = position
+					self.accounts.onOpen(None)
+
 
 class MainWindow(BaseFrame):
 	def __init__(self):
@@ -116,5 +126,11 @@ class MainWindow(BaseFrame):
 		self.panels = {0: MainPanel(self)}
 		menubar = wx.MenuBar()
 		mainMenu = wx.Menu()
-
+		exitItem = mainMenu.Append(-1, "خروج")
+		menubar.Append(mainMenu, "القائمة الرئيسية")
+		self.SetMenuBar(menubar)
+		self.Bind(wx.EVT_MENU, lambda e: wx.Exit(), exitItem)
 		self.Show()
+		Thread(target=check_for_updates, args=[True]).start()
+
+

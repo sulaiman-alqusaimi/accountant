@@ -6,6 +6,7 @@ if os.path.exists(os.path.join(os.getcwd(), "unins000.exe")):
 else:
 		base_dir = os.path.join(os.getcwd(), "applicationData")
 
+update_path = os.path.join(base_dir, "updates")
 
 data_path = os.path.join(base_dir, "data")
 settings_path = os.path.join(base_dir, "settings.ini")
