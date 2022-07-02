@@ -304,6 +304,7 @@ class AccountSettingsDialog(wx.Dialog):
 		self.maximumAmount = wx.TextCtrl(p, -1)
 		self.togleAmount()
 		saveButton = wx.Button(p, -1, "حفظ")
+		saveButton.SetDefault()
 		cancelButton = wx.Button(p, wx.ID_CANCEL, "إلغاء")
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		sizer.Add(self.activeCheck)

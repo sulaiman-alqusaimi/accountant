@@ -17,7 +17,7 @@ class AccountViewer(wx.Panel):
 		settingsButton = wx.Button(self, -1, "إعدادات الحساب...")
 		settingsButton.Bind(wx.EVT_BUTTON, self.onSettings)
 		self.addButton = wx.Button(self, -1, "إضافة منتج...")
-
+		self.addButton.Enabled = self.account.active
 		self.addButton.Bind(wx.EVT_BUTTON, self.onAdd)
 		payButton = wx.Button(self, -1, "ادفع...")
 		payButton.Bind(wx.EVT_BUTTON, self.onPay)
@@ -60,6 +60,8 @@ class AccountViewer(wx.Panel):
 		self.summary.SetFocus()
 
 	def onAdd(self, event):
+		if not self.account.active:
+			return
 		AddProduct(self.Parent, self.account)
 		self.display_summary()
 	def onPay(self, event):
