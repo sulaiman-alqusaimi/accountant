@@ -33,6 +33,8 @@ def add_account(name, phone_number, file=None):
 		"phone": phone_number,
 		"products": [],
 		"payments": [],
+		"active": True,
+		"maximum": None,
 		"total": 0,
 		"date": datetime.now(),
 	}
@@ -62,7 +64,8 @@ class Account:
 		self.__phone = account["phone"]
 		self.__products = account["products"]
 		self.__payments = account['payments']
-		# self.__total = account["total"]
+		self.__active = account.get("active", True)
+		self.__maximum = account.get("maximum")
 		self.update_total()
 		self.__date = account['date']
 
@@ -89,6 +92,22 @@ class Account:
 	def phone(self, value):
 		self.edit("phone", value)
 		self.__phone = value
+	@property
+	def active(self):
+		return self.__active
+	@active.setter
+	def active(self, value):
+		self.edit("active", value)
+		self.__active = value
+	@property
+	def maximum(self):
+		return self.__maximum
+	@maximum.setter
+	def maximum(self, value):
+		self.edit("maximum", value)
+		self.__maximum = value
+
+
 	@property
 	def total(self):
 		return self.__total

@@ -131,6 +131,7 @@ class MainWindow(BaseFrame):
 		self.SetMenuBar(menubar)
 		self.Bind(wx.EVT_MENU, lambda e: wx.Exit(), exitItem)
 		self.Show()
-		Thread(target=check_for_updates, args=[True]).start()
-
+		t = Thread(target=check_for_updates, args=[True])
+		t.daemon = True
+		t.start()
 

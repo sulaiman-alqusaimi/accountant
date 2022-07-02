@@ -119,6 +119,10 @@ class AddProduct(BaseProductDialog):
 		if not self.validate():
 			return
 		p = Product(self.name.Value, float(self.price.Value), self.phone.Value)
+		if self.account.maximum is not None and p.price + self.account.total > self.account.maximum:
+			wx.MessageBox(f"لقد تجاوزت سقف الحساب البالغ مقداره {self.account.maximum} ريالًا", "خطأ", wx.ICON_ERROR, self)
+			self.Destroy()
+			return
 		products = self.account.products
 		products.append(p)
 		self.account.products = products
@@ -137,6 +141,11 @@ class EditProduct(BaseProductDialog):
 	def onAdd(self, event):
 		if not self.validate():
 			return
+		if self.account.total + float(self.price.Value) > self.account.maximum:
+			wx.MessageBox(f"لقد تجاوزت سقف الحساب البالغ مقداره {self.account.maximum} ريالًا", "خطأ", wx.ICON_ERROR, self)
+			self.Destroy()
+			return
+
 		self.product.name = self.name.Value
 		self.product.price = float(self.price.Value)
 		self.product.phone = self.phone.Value
@@ -278,4 +287,65 @@ class ResultsDialog(wx.Dialog):
 
 	def onOpen(self, event):
 		self.account = self.results.GetClientData(self.results.Selection)
+		self.Destroy()
+
+class AccountSettingsDialog(wx.Dialog):
+	def __init__(self, parent, account):
+		self.account = account
+		super().__init__(parent, title="إعدادات الحساب")
+		self.CenterOnParent()
+		p = wx.Panel(self)
+		self.activeCheck = wx.CheckBox(p, -1, "تنشيط الحساب")
+		self.activeCheck.Value = self.account.active
+		stateLabel = wx.StaticText(p, -1, "سقف الحساب: ")
+		self.maximumState = wx.Choice(p, -1, choices=["بلا سقف", "تعيين سقف"])
+		self.maximumState.Selection = 1 if self.account.maximum else 0
+		self.amountLabel = wx.StaticText(p, -1, "قيمة السقف: ")
+		self.maximumAmount = wx.TextCtrl(p, -1)
+		self.togleAmount()
+		saveButton = wx.Button(p, -1, "حفظ")
+		cancelButton = wx.Button(p, wx.ID_CANCEL, "إلغاء")
+		sizer = wx.BoxSizer(wx.VERTICAL)
+		sizer.Add(self.activeCheck)
+		grid = wx.GridSizer(3, 2, 5)
+		grid.AddMany([
+			(stateLabel, 1),
+			(self.maximumState, 1, wx.EXPAND),
+			(self.amountLabel, 1),
+			(self.maximumAmount, 1, wx.EXPAND),
+			(saveButton, 1),
+			(cancelButton, 1)
+])
+		sizer.Add(grid)
+		p.SetSizer(sizer)
+		self.maximumState.Bind(wx.EVT_CHOICE, self.onChoice)
+		saveButton.Bind(wx.EVT_BUTTON, self.onSave)
+		self.ShowModal()
+
+	def togleAmount(self):
+		if self.account.maximum is not None:
+			self.maximumAmount.Value = str(self.account.maximum)
+		else:
+			self.maximumAmount.Value = "100000"
+			self.amountLabel.Hide()
+			self.maximumAmount.Hide()
+	def onChoice(self, event):
+		selection = self.maximumState.Selection
+
+		if selection == 1:
+			self.amountLabel.Show()
+			self.maximumAmount.Show()
+			self.maximumAmount.SetFocus()
+		else:
+			self.amountLabel.Hide()
+			self.maximumAmount.Hide()
+
+	def onSave(self, event):
+		self.account.active = self.activeCheck.Value
+		if self.maximumState.Selection == 0:
+			maximum = None
+		else:
+			value = float(self.maximumAmount.Value)
+			maximum = value if value - int(value) != 0.0 else int(value)
+		self.account.maximum = maximum
 		self.Destroy()
