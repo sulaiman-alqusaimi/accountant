@@ -69,11 +69,11 @@ class AccountViewer(wx.Panel):
 		self.display_summary()
 	def display_summary(self):
 		status = "نشط" if self.account.active else "غير نشط"
-		maximum = self.account.maximum if self.account.maximum else "لم يتم تعيينه"
+		maximum = f"{self.account.maximum if self.account.maximum - int(self.account.maximum) != 0.0 else int(self.account.maximum)} ريال" if self.account.maximum else "لم يتم تعيينه"
 		self.summary.SetValue(
 f"""اسم العميل: {self.account.name}
 رقم الهاتف: {self.account.phone}
-الحساب الإجمالي: {round(self.account.total, 3)}
+الحساب الإجمالي: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 حالة الحساب: {status}
 سقف الحساب: {maximum}
 """)

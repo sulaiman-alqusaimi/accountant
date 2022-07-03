@@ -135,13 +135,13 @@ class EditProduct(BaseProductDialog):
 		super().__init__(parent, account)
 		self.Title = "تحرير المنتج"
 		self.name.Value = product.name
-		self.price.Value = str(product.price)
+		self.price.Value = str(product.price if product.price - int(product.price) != 0.0 else int(product.price))
 		self.phone.Value = product.phone
 		self.ShowModal()
 	def onAdd(self, event):
 		if not self.validate():
 			return
-		if self.account.total + float(self.price.Value) > self.account.maximum:
+		if self.account.maximum is not None and (self.account.total + float(self.price.Value)) - self.product.price > self.account.maximum:
 			wx.MessageBox(f"لقد تجاوزت سقف الحساب البالغ مقداره {self.account.maximum} ريالًا", "خطأ", wx.ICON_ERROR, self)
 			self.Destroy()
 			return
@@ -173,7 +173,7 @@ class EditPaymentDialog(BasePaymentDialog):
 		self.payment = payment
 		super().__init__(parent, account)
 		self.Title = "تحرير معلومات الدفع"
-		self.amount.Value = str(payment.amount)
+		self.amount.Value = str(payment.amount if payment.amount - int(payment.amount) != 0.0 else int(payment.amount))
 		self.phone.Value = payment.phone
 		self.notes.Value = payment.notes
 		self.ShowModal()
@@ -197,9 +197,9 @@ class EventsHistory(wx.Dialog):
 		events = get_events(self.account, True)
 		for event in events:
 			if type(event) == Product:
-				self.eventsBox.Append(f"المنتج: {event.name}. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {event.price}", event)
+				self.eventsBox.Append(f"المنتج: {event.name}. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {event.price if event.price - int(event.price) != 0.0 else int(event.price)} ريال", event)
 			elif type(event) == Payment:
-				self.eventsBox.Append(f"دفع مبلغ. القيمة {event.amount}. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}", event)
+				self.eventsBox.Append(f"دفع مبلغ. القيمة {event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}", event)
 		self.editButton = wx.Button(p, -1, "تحرير...")
 		cancelButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
 		self.editButton.SetDefault()
@@ -216,10 +216,10 @@ class EventsHistory(wx.Dialog):
 		data = self.eventsBox.GetClientData(selection)
 		if type(data) == Product:
 			EditProduct(self, self.account, data)
-			self.eventsBox.SetString(selection, f"المنتج: {data.name}. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {data.price}")
+			self.eventsBox.SetString(selection, f"المنتج: {data.name}. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {data.price if data.price - int(data.price) != 0.0 else int(data.price)} ريال")
 		elif type(data) == Payment:
 			EditPaymentDialog(self, self.account, data)
-			self.eventsBox.SetString(selection, f"دفع مبلغ. القيمة {data.amount}. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}")
+			self.eventsBox.SetString(selection, f"دفع مبلغ. القيمة {data.amount if data.amount - int(data.amount) != 0.0 else int(data.amount)} ريال. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}")
 
 	def contextSetup(self):
 		context = wx.Menu()

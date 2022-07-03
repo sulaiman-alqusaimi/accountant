@@ -38,14 +38,14 @@ class Report(wx.Dialog):
 			if type(event) == Product:
 				report += "الحدث: منتج جديد\n"
 				report += f"""اسم المنتج: {event.name}
-السعر: {event.price}
+السعر: {event.price if event.price - int(event.price) != 0.0 else int(event.price)} ريال
 رقم الهاتف: {event.phone}
 التاريخ: {event.date.strftime("%d/%m/%Y %#I:%#M %p")}
 
 """
 			elif type(event) == Payment:
 				report += "الحدث: دفع مبلغ\n"
-				report += f"""المبلغ المدفوع: {event.amount}
+				report += f"""المبلغ المدفوع: {event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال
 التاريخ: {event.date.strftime("%d/%m/%Y %#I:%#M %p")}
 رقم الهاتف: {event.phone}
 """
@@ -55,13 +55,13 @@ class Report(wx.Dialog):
 		product_total = 0
 		for product in self.account.products:
 			product_total += product.price
-		report += f"تكلفة جميع المنتجات: {product_total}\n"
+		report += f"تكلفة جميع المنتجات: {product_total if product_total - int(product_total) != 0.0 else int(product_total)} ريال\n"
 		pay_total = 0
 		for payment in self.account.payments:
 			pay_total += payment.amount
 
-		report += f"إجمالي ما تم دفعه: {pay_total}\n"
-		report += f"المتبقي من الحساب: {round(self.account.total, 3)}"
+		report += f"إجمالي ما تم دفعه: {pay_total if pay_total - int(pay_total) != 0.0 else int(pay_total)} ريال\n"
+		report += f"المتبقي من الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال"
 		return report
 
 	def onExport(self, event):
@@ -123,7 +123,7 @@ f"""<h3>الحدث: منتج جديد</h3>
 </tr>
 <tr>
 <th>السعر</th>
-<td>{event.price}</td>
+<td>{event.price if event.price - int(event.price) != 0.0 else int(event.price)} ريال</td>
 </tr>
 
 <tr>
@@ -146,7 +146,7 @@ f"""
 <tr>
 
 <th>المبلغ المدفوع</th>
-<td>{event.amount}</td>
+<td>{event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال</td>
 </tr>
 
 <tr>
@@ -184,16 +184,16 @@ f"""
 <table border="1">
 <tr>
 <th>تكلفة جميع المنتجات</th>
-<td>{product_total}</td>
+<td>{product_total if product_total - int(product_total) != 0.0 else int(product_total)} ريال</td>
 </tr>
 
 <tr>
 <th>اجمالي ما تم دفعه</th>
-<td>{pay_total}</td>
+<td>{pay_total if pay_total - int(pay_total) != 0.0 else int(pay_total)} ريال</td>
 </tr>
 <tr>
 <th>المتبقي من الحساب</th>
-<td>{self.account.total}</td>
+<td>{self.account.total if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال</td>
 </tr>
 </table></div>
 </body>
