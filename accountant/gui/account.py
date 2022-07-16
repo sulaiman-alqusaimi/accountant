@@ -1,5 +1,7 @@
 
 import wx
+
+from utiles import play
 from .components import BaseFrame
 import application
 from .dialogs import AddProduct, PayDialog, EventsHistory, AccountSettingsDialog
@@ -107,3 +109,4 @@ f"""اسم العميل: {self.account.name}
 		self.Parent.panels[0].Show()
 		self.Parent.panels[0].SetFocus()
 		self.Destroy()
+		play("close")

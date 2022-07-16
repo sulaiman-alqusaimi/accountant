@@ -4,7 +4,7 @@ import application
 from .dialogs import NewAccountDialog, EditAccountDialog, ResultsDialog, SearchDialog
 from database import get_accounts, delete_account, Account
 from .account import AccountViewer
-from utiles import check_for_updates
+from utiles import check_for_updates, play
 from threading import Thread
 
 
@@ -55,7 +55,7 @@ class ListBox(wx.ListBox):
 		account = Account(ac_id)
 		self.Parent.Hide()
 		viewer = AccountViewer(wx.GetApp().GetTopWindow(), account)
-
+		play("open")
 
 
 
@@ -97,7 +97,9 @@ class MainPanel(wx.Panel):
 		self.accounts.SetFocus()if not self.FindFocus() == self.accounts else None
 	def setData(self):
 		for account_id, name in get_accounts():
-			self.accounts.Append(name, account_id)
+			total = Account(account_id).total
+			total = round(total, 3) if total - int(total) != 0.0 else int(total)
+			self.accounts.Append(f"{name}, المجموع {total} ريال", account_id)
 	def onSearch(self, event):
 		dlg = SearchDialog(self)
 		if dlg.result:
@@ -111,7 +113,10 @@ class MainPanel(wx.Panel):
 				viewer = ResultsDialog(self.Parent, results)
 				if viewer.account:
 					account = viewer.account
-					position = self.accounts.Strings.index(account[1])
+					for position in range(self.accounts.Count):
+						if self.accounts.GetClientData(position) == account[0]:
+							break
+
 					self.accounts.Selection = position
 					self.accounts.onOpen(None)
 

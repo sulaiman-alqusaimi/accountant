@@ -1,7 +1,7 @@
 import subprocess
 import wx
 from database import Product, Payment
-from utiles import get_events
+from utiles import get_events, play
 
 class Report(wx.Dialog):
 	def __init__(self, parent, account):
@@ -26,11 +26,15 @@ class Report(wx.Dialog):
 		sizer1.Add(exportWeb, 1)
 		sizer.Add(sizer1)
 		p.SetSizer(sizer)
+		play("report")
 		self.ShowModal()
 	def display_report(self):
 		report = f"""اسم العميل: {self.account.name}
 رقم الهاتف: {self.account.phone}
 تاريخ التسجيل: {self.account.date.strftime("%d/%m/%Y")}
+حالة الحساب: {"نشط" if self.account.active else "غير نشط"}
+سقف الحساب: {"لا يوجد" if not self.account.maximum else "{} ريال".format(round(self.account.maximum, 3) if self.account.maximum - int(self.account.maximum) != 0.0 else int(self.account.maximum))}
+
 
 """
 		events = get_events(self.account)
@@ -48,6 +52,7 @@ class Report(wx.Dialog):
 				report += f"""المبلغ المدفوع: {event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال
 التاريخ: {event.date.strftime("%d/%m/%Y %#I:%#M %p")}
 رقم الهاتف: {event.phone}
+
 """
 				if event.notes:
 					report += f"ملاحظات الدفع: \n{event.notes}"
@@ -61,7 +66,8 @@ class Report(wx.Dialog):
 			pay_total += payment.amount
 
 		report += f"إجمالي ما تم دفعه: {pay_total if pay_total - int(pay_total) != 0.0 else int(pay_total)} ريال\n"
-		report += f"المتبقي من الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال"
+		report += f"المتبقي من الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال\n"
+
 		return report
 
 	def onExport(self, event):
@@ -103,6 +109,14 @@ f"""<html lang='ar' dir='rtl'>
 <tr>
 <th>تاريخ التسجيل</th>
 <td>{self.account.date.strftime("%d/%m/%Y")}</td>
+</tr>
+<tr>
+<th>الحالة</th>
+<td>{"نشط" if self.account.active else "غير نشط"}</td>
+</tr>
+<tr>
+<th>سقف الحساب</th>
+<td>{"لا يوجد" if not self.account.maximum else "{} ريال".format(round(self.account.maximum, 3) if self.account.maximum - int(self.account.maximum) != 0.0 else int(self.account.maximum))}
 </tr>
 </table>
 <hr />
@@ -195,6 +209,7 @@ f"""
 <th>المتبقي من الحساب</th>
 <td>{self.account.total if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال</td>
 </tr>
+
 </table></div>
 </body>
 </html>

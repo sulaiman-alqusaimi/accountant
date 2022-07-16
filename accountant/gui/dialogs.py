@@ -1,6 +1,7 @@
 import wx
-from utiles import get_events
+from utiles import get_events, play
 from database import add_account, Account, Product, Payment
+import pyperclip
 
 
 class AccountInfo(wx.Dialog):
@@ -40,8 +41,9 @@ class BaseProductDialog(wx.Dialog):
 		addButton.SetDefault()
 		cancel = wx.Button(p, wx.ID_CANCEL, "إلغاء")
 		addButton.Bind(wx.EVT_BUTTON, self.onAdd)
-	def onAdd(self, event):
-		raise NotImplementedError()
+	def onAdd(self, event=None):
+		play("save")
+
 	def validate(self):
 		if not self.name.Value:
 			return
@@ -77,8 +79,8 @@ class BasePaymentDialog(wx.Dialog):
 		return True
 
 
-	def onPay(self, event):
-		raise NotImplementedError()
+	def onPay(self, event=None):
+		play("save")
 
 
 class NewAccountDialog(AccountInfo):
@@ -120,6 +122,7 @@ class AddProduct(BaseProductDialog):
 			return
 		p = Product(self.name.Value, float(self.price.Value), self.phone.Value)
 		if self.account.maximum is not None and p.price + self.account.total > self.account.maximum:
+			play("limit")
 			wx.MessageBox(f"لقد تجاوزت سقف الحساب البالغ مقداره {self.account.maximum} ريالًا", "خطأ", wx.ICON_ERROR, self)
 			self.Destroy()
 			return
@@ -127,7 +130,16 @@ class AddProduct(BaseProductDialog):
 		products.append(p)
 		self.account.products = products
 		self.Destroy()
+		super().onAdd(None)
+		report = \
+f"""اسم المنتج: {p.name}
+التاريخ: {p.date.strftime("%d/%m/%Y %#I:%#M %p")}
+رقم الهاتف: {p.phone}
+السعر: {p.price if p.price - int(p.price) != 0.0 else int(p.price)} ريال
+إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
+"""
+		SummaryDialog(wx.GetApp().GetTopWindow(), report)
 
 class EditProduct(BaseProductDialog):
 	def __init__(self, parent, account, product):
@@ -142,6 +154,7 @@ class EditProduct(BaseProductDialog):
 		if not self.validate():
 			return
 		if self.account.maximum is not None and (self.account.total + float(self.price.Value)) - self.product.price > self.account.maximum:
+			play("limit")
 			wx.MessageBox(f"لقد تجاوزت سقف الحساب البالغ مقداره {self.account.maximum} ريالًا", "خطأ", wx.ICON_ERROR, self)
 			self.Destroy()
 			return
@@ -150,8 +163,18 @@ class EditProduct(BaseProductDialog):
 		self.product.price = float(self.price.Value)
 		self.product.phone = self.phone.Value
 		self.account.products = self.account.products
+		parent = self.Parent
 		self.Destroy()
+		super().onAdd()
+		report = \
+f"""اسم المنتج: {self.product.name}
+التاريخ: {self.product.date.strftime("%d/%m/%Y %#I:%#M %p")}
+رقم الهاتف: {self.product.phone}
+السعر: {self.product.price if self.product.price - int(self.product.price) != 0.0 else int(self.product.price)} ريال
+إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
+"""
+		SummaryDialog(parent, report)
 
 class PayDialog(BasePaymentDialog):
 	def __init__(self, parent, account):
@@ -166,7 +189,17 @@ class PayDialog(BasePaymentDialog):
 		self.account.payments = payments
 		self.account.update_total()
 		self.Destroy()
+		super().onPay()
+		previous = self.account.total + payment.amount
 
+		report = \
+f"""المبلغ المضاف: {payment.amount if payment.amount - int(payment.amount) != 0.0 else int(payment.amount)} ريال
+التاريخ: {payment.date.strftime("%d/%m/%Y %#I:%#M %p")}
+الحساب السابق: {round(previous, 3) if previous - int(previous) != 0.0 else int(previous)} ريال
+إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
+
+"""
+		SummaryDialog(wx.GetApp().GetTopWindow(), report)
 
 class EditPaymentDialog(BasePaymentDialog):
 	def __init__(self, parent, account, payment):
@@ -182,7 +215,20 @@ class EditPaymentDialog(BasePaymentDialog):
 		self.payment.phone = self.phone.Value
 		self.payment.notes = self.notes.Value
 		self.account.payments = self.account.payments
+		parent = self.Parent
 		self.Destroy()
+		super().onPay()
+		previous = self.account.total + self.payment.amount
+
+		report = \
+f"""المبلغ المضاف: {self.payment.amount if self.payment.amount - int(self.payment.amount) != 0.0 else int(self.payment.amount)} ريال
+التاريخ: {self.payment.date.strftime("%d/%m/%Y %#I:%#M %p")}
+الحساب السابق: {round(previous, 3) if previous - int(previous) != 0.0 else int(previous)} ريال
+إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
+
+"""
+		SummaryDialog(parent, report)
+
 
 
 
@@ -277,12 +323,16 @@ class ResultsDialog(wx.Dialog):
 		wx.StaticText(p, -1, "قائمة العملاء: ")
 		self.results = wx.ListBox(p, -1)
 		for account in accounts:
-			self.results.Append(account[1], account)
+			total = Account(account[0]).total
+			total = round(total, 3) if total - int(total) != 0.0 else int(total)
+
+			self.results.Append(f"{account[1]}, إجمالي الحساب: {total} ريال", account)
 		self.results.Selection = 0
 		openButton = wx.Button(p, -1, "اذهب")
 		openButton.SetDefault()
 		cancelButton = wx.Button(p, wx.ID_CANCEL, "العودة إلى النافذة الرئيسية")
-		ه=i=openButton.Bind(wx.EVT_BUTTON, self.onOpen)
+		openButton.Bind(wx.EVT_BUTTON, self.onOpen)
+		play("results")
 		self.ShowModal()
 
 	def onOpen(self, event):
@@ -350,3 +400,19 @@ class AccountSettingsDialog(wx.Dialog):
 			maximum = value if value - int(value) != 0.0 else int(value)
 		self.account.maximum = maximum
 		self.Destroy()
+
+
+class SummaryDialog(wx.Dialog):
+	def __init__(self, parent, summary):
+		super().__init__(parent, title="ملخص العملية")
+		self.CenterOnParent()
+		p = wx.Panel(self)
+		lbl = wx.StaticText(p, -1, "محتوى الملخص")
+		self.summaryBox = wx.TextCtrl(p, -1, value=summary, style=wx.TE_MULTILINE + wx.TE_READONLY + wx.HSCROLL)
+		copyButton = wx.Button(p, -1, "نسخ")
+		copyButton.Bind(wx.EVT_BUTTON, self.onCopy)
+		closeButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
+		self.ShowModal()
+	def onCopy(self, event):
+		pyperclip.copy(self.summaryBox.Value)
+		self.summaryBox.SetFocus()

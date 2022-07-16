@@ -3,6 +3,8 @@ import application
 from threading import Thread
 import requests
 import wx
+from winsound import PlaySound
+import os
 
 
 
@@ -38,3 +40,7 @@ def check_for_updates(quiet=False):
 			"خطأ", 
 			parent=wx.GetApp().GetTopWindow(), style=wx.ICON_ERROR
 		) if not quiet else None
+
+def play(sound):
+		path = os.path.join("sounds", f"{sound}.wav")
+		PlaySound(path, 1)
