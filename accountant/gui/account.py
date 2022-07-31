@@ -1,10 +1,11 @@
 
 import wx
+from database import Account
 
 from utiles import play
 from .components import BaseFrame
 import application
-from .dialogs import AddProduct, PayDialog, EventsHistory, AccountSettingsDialog
+from .dialogs import AddProduct, PayDialog, EventsHistory, AccountSettingsDialog, NotificationDialog
 from .report_viewer import Report
 
 
@@ -25,6 +26,8 @@ class AccountViewer(wx.Panel):
 		payButton.Bind(wx.EVT_BUTTON, self.onPay)
 		eventsButton = wx.Button(self, -1, "تحرير عمليات الحساب")
 		eventsButton.Bind(wx.EVT_BUTTON, self.onEvents)
+		notificationsButton = wx.Button(self, -1, "إشعارات الحساب")
+		notificationsButton.Bind(wx.EVT_BUTTON, self.onNotifications)
 		reportButton = wx.Button(self, -1, "عرض التقرير")
 		reportButton.Bind(wx.EVT_BUTTON, self.onReport)
 		clearButton = wx.Button(self, -1, "تصفير الحساب")
@@ -35,6 +38,7 @@ class AccountViewer(wx.Panel):
 			(wx.ACCEL_ALT, ord("S"), settingsButton.GetId()),
 			(wx.ACCEL_ALT, ord("A"), self.addButton.GetId()),
 			(wx.ACCEL_ALT, ord("P"), payButton.GetId()),
+			(wx.ACCEL_ALT, ord("N"), notificationsButton.GetId()),
 			(wx.ACCEL_ALT, ord("E"), eventsButton.GetId()),
 			(wx.ACCEL_ALT, ord("R"), reportButton.GetId()),
 			(wx.ACCEL_ALT, ord("C"), clearButton.GetId())
@@ -48,6 +52,7 @@ class AccountViewer(wx.Panel):
 		sizer1.Add(self.addButton, 1)
 		sizer1.Add(payButton, 1)
 		sizer1.Add(eventsButton, 1)
+		sizer1.Add(notificationsButton, 1)
 		sizer1.Add(reportButton, 1)
 		sizer1.Add(clearButton, 1)
 		sizer.Add(sizer1, 1, wx.EXPAND)
@@ -72,12 +77,19 @@ class AccountViewer(wx.Panel):
 	def display_summary(self):
 		status = "نشط" if self.account.active else "غير نشط"
 		maximum = f"{self.account.maximum if self.account.maximum - int(self.account.maximum) != 0.0 else int(self.account.maximum)} ريال" if self.account.maximum else "لم يتم تعيينه"
+		notes = self.account.notes
+		if notes:
+			notes = f"""ملاحظات:
+{notes}"""
+		else:
+			notes = ""
 		self.summary.SetValue(
 f"""اسم العميل: {self.account.name}
 رقم الهاتف: {self.account.phone}
 الحساب الإجمالي: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 حالة الحساب: {status}
 سقف الحساب: {maximum}
+{notes}
 """)
 	def onHook(self, event):
 		if event.KeyCode == wx.WXK_ESCAPE:
@@ -90,7 +102,8 @@ f"""اسم العميل: {self.account.name}
 	def onEvents(self, event):
 		EventsHistory(self.Parent, self.account)
 
-
+	def onNotifications(self, event):
+		NotificationDialog(self.Parent, self.account)
 	def onFocus(self, event):
 		event.Skip()
 		self.display_summary()
@@ -108,5 +121,9 @@ f"""اسم العميل: {self.account.name}
 		del self.Parent.panels[1]
 		self.Parent.panels[0].Show()
 		self.Parent.panels[0].SetFocus()
+		account = Account(self.Parent.panels[0].accounts.GetClientData(self.Parent.panels[0].accounts.Selection))
+		total = account.total
+		total = round(total, 3) if total - int(total) != 0.0 else int(total)
+		self.Parent.panels[0].accounts.SetString(self.Parent.panels[0].accounts.Selection, f"{account.name}, المجموع {total} ريال")
 		self.Destroy()
 		play("close")

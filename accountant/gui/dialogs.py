@@ -1,6 +1,6 @@
 import wx
 from utiles import get_events, play
-from database import add_account, Account, Product, Payment
+from database import add_account, Account, Product, Payment, Notification
 import pyperclip
 
 
@@ -139,6 +139,9 @@ f"""اسم المنتج: {p.name}
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
 """
+		notifications = self.account.notifications
+		notifications.append(Notification("إضافة منتج", report))
+		self.account.notifications = notifications
 		SummaryDialog(wx.GetApp().GetTopWindow(), report)
 
 class EditProduct(BaseProductDialog):
@@ -174,6 +177,10 @@ f"""اسم المنتج: {self.product.name}
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
 """
+		notifications = self.account.notifications
+		notifications.append(Notification("تحرير منتج", report))
+		self.account.notifications = notifications
+
 		SummaryDialog(parent, report)
 
 class PayDialog(BasePaymentDialog):
@@ -199,6 +206,10 @@ f"""المبلغ المضاف: {payment.amount if payment.amount - int(payment.a
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
 """
+		notifications = self.account.notifications
+		notifications.append(Notification("دفع مبلغ", report))
+		self.account.notifications = notifications
+
 		SummaryDialog(wx.GetApp().GetTopWindow(), report)
 
 class EditPaymentDialog(BasePaymentDialog):
@@ -227,6 +238,10 @@ f"""المبلغ المضاف: {self.payment.amount if self.payment.amount - int
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
 """
+		notifications = self.account.notifications
+		notifications.append(Notification("تحرير مبلغ", report))
+		self.account.notifications = notifications
+
 		SummaryDialog(parent, report)
 
 
@@ -326,7 +341,7 @@ class ResultsDialog(wx.Dialog):
 			total = Account(account[0]).total
 			total = round(total, 3) if total - int(total) != 0.0 else int(total)
 
-			self.results.Append(f"{account[1]}, إجمالي الحساب: {total} ريال", account)
+			self.results.Append(f"{account[1]}, المجموع {total} ريال", account)
 		self.results.Selection = 0
 		openButton = wx.Button(p, -1, "اذهب")
 		openButton.SetDefault()
@@ -353,17 +368,22 @@ class AccountSettingsDialog(wx.Dialog):
 		self.amountLabel = wx.StaticText(p, -1, "قيمة السقف: ")
 		self.maximumAmount = wx.TextCtrl(p, -1)
 		self.togleAmount()
+		notesLabel = wx.StaticText(p, -1, "ملاحظات: ")
+		self.notes = wx.TextCtrl(p, -1, value=self.account.notes, style=wx.TE_MULTILINE + wx.HSCROLL)
+
 		saveButton = wx.Button(p, -1, "حفظ")
 		saveButton.SetDefault()
 		cancelButton = wx.Button(p, wx.ID_CANCEL, "إلغاء")
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		sizer.Add(self.activeCheck)
-		grid = wx.GridSizer(3, 2, 5)
+		grid = wx.GridSizer(4, 2, 5)
 		grid.AddMany([
 			(stateLabel, 1),
 			(self.maximumState, 1, wx.EXPAND),
 			(self.amountLabel, 1),
 			(self.maximumAmount, 1, wx.EXPAND),
+		(notesLabel, 1),
+			(self.notes, 1, wx.EXPAND),
 			(saveButton, 1),
 			(cancelButton, 1)
 ])
@@ -399,6 +419,8 @@ class AccountSettingsDialog(wx.Dialog):
 			value = float(self.maximumAmount.Value)
 			maximum = value if value - int(value) != 0.0 else int(value)
 		self.account.maximum = maximum
+		if self.account.notes != self.notes.Value:
+			self.account.notes = self.notes.Value
 		self.Destroy()
 
 
@@ -412,7 +434,69 @@ class SummaryDialog(wx.Dialog):
 		copyButton = wx.Button(p, -1, "نسخ")
 		copyButton.Bind(wx.EVT_BUTTON, self.onCopy)
 		closeButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
+
 		self.ShowModal()
 	def onCopy(self, event):
 		pyperclip.copy(self.summaryBox.Value)
 		self.summaryBox.SetFocus()
+
+def has_items(function):
+	def rapper(self, event=None):
+		if self.notifications.Count > 0 and self.notifications.Selection != -1:
+			return function(self, event)
+	return rapper
+
+class NotificationDialog(wx.Dialog):
+	def __init__(self, parent, account):
+		super().__init__(parent, title="الإشعارات")
+		self.account = account
+		self.CenterOnParent()
+		p = wx.Panel(self)
+		self.notifications = wx.ListBox(p, -1)
+		self.copyButton = wx.Button(p, -1, "نسخ")
+		self.deleteButton = wx.Button(p, -1, "حذف...")
+		self.clearButton = wx.Button(p, -1, "إفراغ")
+		closeButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
+		for notification in self.account.notifications[::-1]:
+			self.notifications.Append(f"""الإشعار: {notification.title}. نص الإشعار: {notification.body}""", notification)
+		self.toggleControls()
+		self.notifications.Selection = 0 if self.notifications.Count > 0 else -1
+		self.copyButton.Bind(wx.EVT_BUTTON, self.onCopy)
+		self.deleteButton.Bind(wx.EVT_BUTTON, self.onDelete)
+		self.clearButton.Bind(wx.EVT_BUTTON, self.onClear)
+		self.notifications.Bind(wx.EVT_CHAR_HOOK, self.onHook)
+		self.ShowModal()
+	def toggleControls(self):
+		for control in [self.copyButton, self.deleteButton, self.clearButton]:
+			control.Enabled = self.notifications.Count > 0
+
+	@has_items
+	def onCopy(self, event):
+		selection = self.notifications.Selection
+		notification = self.notifications.GetClientData(selection)
+		pyperclip.copy(notification.body)
+		self.notifications.SetFocus()
+	@has_items
+	def onDelete(self, event):
+		selection = self.notifications.Selection
+		notification = self.notifications.GetClientData(selection)
+		self.notifications.Delete(selection)
+		notifications = self.account.notifications
+		notifications.remove(notification)
+		self.account.notifications = notifications
+		self.notifications.Selection = selection -1
+		self.notifications.SetFocus()
+		self.toggleControls()
+	@has_items
+	def onClear(self, event):
+		if wx.MessageBox("هل أنت متأكد من رغبتك في إفراغ جميع الإشعارات لهذا الحساب؟", "إفراغ", wx.YES_NO, self) == wx.YES:
+			self.notifications.Clear()
+			self.account.notifications = []
+			self.toggleControls()
+		self.notifications.SetFocus()
+
+	def onHook(self, event):
+		if event.KeyCode in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE):
+			self.onDelete(None)
+		else:
+			event.Skip()

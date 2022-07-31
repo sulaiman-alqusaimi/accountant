@@ -36,6 +36,8 @@ def add_account(name, phone_number, file=None):
 		"active": True,
 		"maximum": None,
 		"total": 0,
+		"notes": "",
+		"notifications": [],
 		"date": datetime.now(),
 	}
 	file["accounts"] = accounts
@@ -66,6 +68,8 @@ class Account:
 		self.__payments = account['payments']
 		self.__active = account.get("active", True)
 		self.__maximum = account.get("maximum")
+		self.__notes = account.get("notes", "")
+		self.__notifications = account.get("notifications", [])
 		self.update_total()
 		self.__date = account['date']
 
@@ -99,6 +103,14 @@ class Account:
 	def active(self, value):
 		self.edit("active", value)
 		self.__active = value
+	@property
+	def notes(self):
+		return self.__notes
+	@notes.setter
+	def notes(self, value):
+		self.edit("notes", value)
+		self.__notes = value
+
 	@property
 	def maximum(self):
 		return self.__maximum
@@ -144,6 +156,14 @@ class Account:
 		self.edit("payments", value)
 		self.__payments = value
 		self.update_total()
+	@property
+	def notifications(self):
+		return self.__notifications
+	@notifications.setter
+	def notifications(self, value):
+		self.edit("notifications", value)
+		self.__notifications = value
+
 
 class Product:
 
@@ -163,3 +183,9 @@ class Payment:
 	@property
 	def date(self):
 		return self.__date
+
+class Notification:
+	def __init__(self, title, body):
+		self.title = title
+		self.body = body
+
