@@ -2,9 +2,10 @@ from .components import BaseFrame
 import wx
 import application
 from .dialogs import NewAccountDialog, EditAccountDialog, ResultsDialog, SearchDialog
-from database import get_accounts, delete_account, Account
+from database import get_accounts, delete_account, get_account_by_id as Account
 from .account import AccountViewer
 from utiles import check_for_updates, play
+from config import config_get, config_set
 from threading import Thread
 
 
@@ -49,7 +50,13 @@ class ListBox(wx.ListBox):
 		if not res == account_id:
 			return
 		if hasattr(dlg, "new_name"):
-			self.SetString(self.Selection, dlg.new_name)
+			self.Parent.sort()
+			for n in range(self.Count):
+				if self.GetClientData(n) == account_id:
+					self.Selection = n
+					break
+
+
 	def onOpen(self, event):
 		ac_id = self.GetClientData(self.Selection)
 		account = Account(ac_id)
@@ -66,16 +73,20 @@ class MainPanel(wx.Panel):
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		self.accounts = ListBox(self, -1)
 		sizer.Add(self.accounts)
-
+		wx.StaticText(self, -1, "فرز حسب: ")
+		self.sortBy = wx.Choice(self, -1, choices=["تاريخ الإضافة", "الاسم", "المجموع"])
+		self.sortBy.Selection = int(config_get("sort_by"))
+		sizer.Add(self.sortBy)
+		self.directionBox = wx.RadioBox(self, -1, "الاتجاه", choices=["تصاعدي", "تنازلي"])
+		self.directionBox.Selection = int(config_get("direction"))
+		sizer.Add(self.directionBox)
 		self.setData()
-		try:
-			self.accounts.Selection = 0
-		except:
-			pass
 		addButton = wx.Button(self, wx.ID_ADD, "إضافة عميل...")
 		addButton.Bind(wx.EVT_BUTTON, self.onAdd)
 		searchButton = wx.Button(self, -1, "بحث...")
 		searchButton.Bind(wx.EVT_BUTTON, self.onSearch)
+		self.sortBy.Bind(wx.EVT_CHOICE, self.onSort)
+		self.directionBox.Bind(wx.EVT_RADIOBOX, self.onDirection)
 		sizer.Add(addButton)
 		sizer.Add(searchButton)
 		hotkeys = wx.AcceleratorTable([
@@ -87,25 +98,55 @@ class MainPanel(wx.Panel):
 		self.Parent.Sizer.Add(self)
 		self.Layout()
 		self.Parent.Sizer.Fit(self)
+	def onDirection(self, event):
+		print("triggred")
+		config_set("direction", self.directionBox.Selection)
+		self.sort()
+	def sort(self):
+		self.accounts.Clear()
+		self.setData()
+
 	def onAdd(self, event):
 		with NewAccountDialog(self.Parent) as dlg:
 			account_id = dlg.ShowModal()
 			name = dlg.accountName.Value
 		if hasattr(dlg, "saved"):
-			self.accounts.Append(name, account_id)
-			self.accounts.Selection = len(self.accounts.Strings)-1
+			self.sort()
+			for n in range(self.accounts.Count):
+				if self.accounts.GetClientData(n) == account_id:
+					self.accounts.Selection = n
+					break
+
 		self.accounts.SetFocus()if not self.FindFocus() == self.accounts else None
+	def onSort(self, event):
+		config_set("sort_by", self.sortBy.Selection)
+		self.sort()
 	def setData(self):
-		for account_id, name in get_accounts():
-			total = Account(account_id).total
+		accounts = get_accounts()
+		sort = self.sortBy.Selection
+		if sort == 1:
+			accounts = sorted(accounts, key=lambda e: e.name)
+		elif sort == 2:
+			accounts = sorted(accounts, key=lambda e: e.total)
+
+		direction=int(config_get("direction"))
+		if direction == 1:
+			accounts.reverse()
+		for account in accounts:
+			total = account.total
 			total = round(total, 3) if total - int(total) != 0.0 else int(total)
-			self.accounts.Append(f"{name}, المجموع {total} ريال", account_id)
+			self.accounts.Append(f"{account.name}, المجموع {total} ريال", account.id)
+		try:
+			self.accounts.Selection = 0
+		except:
+			pass
+
 	def onSearch(self, event):
 		dlg = SearchDialog(self)
 		if dlg.result:
 			results = []
 			for account in get_accounts():
-				if dlg.result in account[1]:
+				if dlg.result in account.name:
 					results.append(account)
 			if not results:
 				wx.MessageBox("لم يتم العثور على العميل المطلوب", "خطأ", wx.ICON_ERROR, self.Parent)
@@ -114,7 +155,7 @@ class MainPanel(wx.Panel):
 				if viewer.account:
 					account = viewer.account
 					for position in range(self.accounts.Count):
-						if self.accounts.GetClientData(position) == account[0]:
+						if self.accounts.GetClientData(position) == account.id:
 							break
 
 					self.accounts.Selection = position

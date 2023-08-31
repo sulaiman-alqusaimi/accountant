@@ -1,191 +1,106 @@
-import shelve
+
 import paths
-import os
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Float, Text, DateTime, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
+import os
 
+path = os.path.join(paths.data_path, "accountant.db")
+# Create a SQLite database
+engine = create_engine(f'sqlite:///{path}')
 
-path = os.path.join(paths.data_path, "accounts")
+# Create a session factory
+Session = sessionmaker(bind=engine)
+session = Session()
 
-with shelve.open(path) as data:
-	if not "accounts" in data:
-		data["accounts"] = {}
+# Create a base class for declarative models
+Base = declarative_base()
 
-def apply(func):
-	def rapper(*args, **kwargs):
-		with shelve.open(path) as data:
-			return func(*args, file=data, **kwargs)
-	return rapper
+def add_account(name, phone):
+	account = Account(name=name, phone=phone, date=datetime.now())
+	session.add(account)
+	session.commit()
+	return account.id
 
+def delete_account(account_id):
+	account = session.query(Account).get(account_id)
+	session.delete(account)
+	session.commit()
 
-
-
-@apply
-def add_account(name, phone_number, file=None):
-	ids = list(file["accounts"].keys())
-	if ids == []:
-		account_id = 0
-	else:
-		account_id = ids[-1]+1
-	accounts = dict(file["accounts"])
-
-	accounts[account_id] = {
-		"name": name,
-		"phone": phone_number,
-		"products": [],
-		"payments": [],
-		"active": True,
-		"maximum": None,
-		"total": 0,
-		"notes": "",
-		"notifications": [],
-		"date": datetime.now(),
-	}
-	file["accounts"] = accounts
-	return account_id
-
-@apply
-def get_accounts(file=None):
-	accounts = []
-	for key, data in file["accounts"].items():
-		accounts.append((key, data["name"]))
+def get_accounts():
+	accounts = list(session.query(Account))
 	return accounts
 
-@apply
-def delete_account(ac_id, file=None):
-	accounts = file["accounts"]
-	accounts.pop(ac_id)
-	file["accounts"] = accounts
+
+def get_account_by_id(account_id):
+	data = session.query(Account).filter_by(id=account_id)
+	return list(data)[0]
 
 
-class Account:
-	def __init__(self, account_id):
-		self.__account_id = account_id
-		with shelve.open(path) as data:
-			account = data["accounts"][self.__account_id]
-		self.__name = account["name"]
-		self.__phone = account["phone"]
-		self.__products = account["products"]
-		self.__payments = account['payments']
-		self.__active = account.get("active", True)
-		self.__maximum = account.get("maximum")
-		self.__notes = account.get("notes", "")
-		self.__notifications = account.get("notifications", [])
-		self.update_total()
-		self.__date = account['date']
+# Define the "accounts" model class
+class Account(Base):
+    __tablename__ = 'accounts'
 
-	@property
-	def date(self):
-		return self.__date
-	def edit(self, key, value):
-		with shelve.open(path) as data:
-			accounts = data["accounts"]
-			accounts[self.__account_id][key] = value
-			data["accounts"] = accounts
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    active = Column(Boolean, default=True)
+    maximum = Column(Float, default=None)
+    notes = Column(Text, default="")
+    date = Column(DateTime)
+    payments = relationship("Payment", back_populates="account", cascade="all, delete")
+    products = relationship("Product", back_populates="account", cascade="all, delete")
+    notifications = relationship("Notification", back_populates="account", cascade="all, delete")
+    @property
+    def total(self):
+        total_products = sum(product.price for product in self.products)
+        total_payments = sum(payment.amount for payment in self.payments)
+        return total_products - total_payments
 
-	@property
-	def name(self):
-		return self.__name
-	@name.setter
-	def name(self, value):
-		self.edit("name", value)
-		self.__name = value
-	@property
-	def phone(self):
-		return self.__phone
-	@phone.setter
-	def phone(self, value):
-		self.edit("phone", value)
-		self.__phone = value
-	@property
-	def active(self):
-		return self.__active
-	@active.setter
-	def active(self, value):
-		self.edit("active", value)
-		self.__active = value
-	@property
-	def notes(self):
-		return self.__notes
-	@notes.setter
-	def notes(self, value):
-		self.edit("notes", value)
-		self.__notes = value
+# Define the "payments" model class
+class Payment(Base):
+    __tablename__ = 'payments'
 
-	@property
-	def maximum(self):
-		return self.__maximum
-	@maximum.setter
-	def maximum(self, value):
-		self.edit("maximum", value)
-		self.__maximum = value
+    id = Column(Integer, primary_key=True)
+    date = Column(DateTime, default=datetime.now())
+    amount = Column(Float)
+    phone = Column(String)
+    notes = Column(Text)
+    account_id = Column(Integer, ForeignKey('accounts.id'))
+
+    account = relationship("Account", back_populates="payments")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.date = datetime.now()
+
+# Define the "products" model class
+class Product(Base):
+    __tablename__ = 'products'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    price = Column(Float)
+    phone = Column(String)
+    date = Column(DateTime, default=datetime.now())
+    account_id = Column(Integer, ForeignKey('accounts.id'))
+
+    account = relationship("Account", back_populates="products")
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.date = datetime.now()
 
 
-	@property
-	def total(self):
-		return self.__total
-	@total.setter
-	def total(self, value):
-		# self.edit("total", value)
-		# self.__total = value
-		raise NotImplementedError("cannot directly modify total")
-	def update_total(self):
-		total = 0
-		for product in self.__products:
-			total += product.price
-		for payment in self.__payments:
-			total -= payment.amount
-		self.edit("total", total)
-		self.__total = total
+# Define the "notifications" model class
+class Notification(Base):
+    __tablename__ = 'notifications'
 
-	@property
-	def products(self):
-		return self.__products
+    id = Column(Integer, primary_key=True)
+    title = Column(String)
+    body = Column(Text)
+    account_id = Column(Integer, ForeignKey('accounts.id'))
 
-	@products.setter
-	def products(self, value):
-		self.edit("products", value)
-		self.__products = value
-		self.update_total()
-
-	@property
-	def payments(self):
-		return self.__payments
-
-	@payments.setter
-	def payments(self, value):
-		self.edit("payments", value)
-		self.__payments = value
-		self.update_total()
-	@property
-	def notifications(self):
-		return self.__notifications
-	@notifications.setter
-	def notifications(self, value):
-		self.edit("notifications", value)
-		self.__notifications = value
+    account = relationship("Account", back_populates="notifications")
 
 
-class Product:
-
-	def __init__(self, name, price, phone):
-		self.name = name
-		self.price = price
-		self.phone = phone
-		self.date = datetime.now()
-
-
-class Payment:
-	def __init__(self, amount, phone, notes=""):
-		self.__date = datetime.now()
-		self.amount = amount
-		self.phone = phone
-		self.notes = notes
-	@property
-	def date(self):
-		return self.__date
-
-class Notification:
-	def __init__(self, title, body):
-		self.title = title
-		self.body = body
-
+Base.metadata.create_all(engine, checkfirst=True)

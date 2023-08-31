@@ -31,7 +31,7 @@ class Report(wx.Dialog):
 	def display_report(self):
 		report = f"""اسم العميل: {self.account.name}
 رقم الهاتف: {self.account.phone}
-تاريخ التسجيل: {self.account.date.strftime("%d/%m/%Y")}
+تاريخ التسجيل: {self.account.date.strftime("%d/%m/%Y") if self.account.date else 'غير موثق'}
 حالة الحساب: {"نشط" if self.account.active else "غير نشط"}
 سقف الحساب: {"لا يوجد" if not self.account.maximum else "{} ريال".format(round(self.account.maximum, 3) if self.account.maximum - int(self.account.maximum) != 0.0 else int(self.account.maximum))}
 
@@ -108,7 +108,7 @@ f"""<html lang='ar' dir='rtl'>
 </tr>
 <tr>
 <th>تاريخ التسجيل</th>
-<td>{self.account.date.strftime("%d/%m/%Y")}</td>
+<td>{self.account.date.strftime("%d/%m/%Y") if self.account.date else 'غير موثق'}</td>
 </tr>
 <tr>
 <th>الحالة</th>
