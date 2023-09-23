@@ -24,7 +24,7 @@ def isOtherInstance():
 
 
 app = wx.App()
-
+locale = wx.Locale(wx.LANGUAGE_ARABIC)
 
 
 

@@ -1,13 +1,13 @@
 
 import wx
-from database import Account
+from database import get_account_by_id as Account
 
 from utiles import play
 from .components import BaseFrame
 import application
 from .dialogs import AddProduct, PayDialog, EventsHistory, AccountSettingsDialog, NotificationDialog
 from .report_viewer import Report
-
+from database import Product, Payment, Notification, session
 
 
 class AccountViewer(wx.Panel):
@@ -38,7 +38,7 @@ class AccountViewer(wx.Panel):
 			(wx.ACCEL_ALT, ord("S"), settingsButton.GetId()),
 			(wx.ACCEL_ALT, ord("A"), self.addButton.GetId()),
 			(wx.ACCEL_ALT, ord("P"), payButton.GetId()),
-			(wx.ACCEL_ALT, ord("N"), notificationsButton.GetId()),
+			(wx.ACCEL_ALT, ord("T"), notificationsButton.GetId()),
 			(wx.ACCEL_ALT, ord("E"), eventsButton.GetId()),
 			(wx.ACCEL_ALT, ord("R"), reportButton.GetId()),
 			(wx.ACCEL_ALT, ord("C"), clearButton.GetId())
@@ -83,14 +83,19 @@ class AccountViewer(wx.Panel):
 {notes}"""
 		else:
 			notes = ""
-		self.summary.SetValue(
-f"""اسم العميل: {self.account.name}
+
+		summary = f"""اسم العميل: {self.account.name}
 رقم الهاتف: {self.account.phone}
 الحساب الإجمالي: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 حالة الحساب: {status}
 سقف الحساب: {maximum}
-{notes}
-""")
+"""
+		if self.account.maximum:
+			used = round(self.account.total/self.account.maximum, 2)
+			used = int(used*100)
+			summary += f"معدل الاستهلاك: {used}%\n"
+		summary += f"{notes}\n"
+		self.summary.SetValue(summary)
 	def onHook(self, event):
 		if event.KeyCode == wx.WXK_ESCAPE:
 			self.onBack(None)
@@ -110,8 +115,14 @@ f"""اسم العميل: {self.account.name}
 
 	def onClear(self, event):
 		if wx.MessageBox(f"أمتأكد من رغبتك في إفراغ بيانات العميل {self.account.name}?", "تصفير الحساب", wx.YES_NO, self.Parent) == wx.YES:
-			self.account.products = []
-			self.account.payments = []
+			products = session.query(Product).filter_by(account=self.account)
+			payments = session.query(Payment).filter_by(account=self.account)
+			notifications = session.query(Notification).filter_by(account=self.account)
+			for record in list(products) + list(payments) + list(notifications):
+				session.delete(record)
+
+			session.commit()
+
 	def onSettings(self, event):
 		AccountSettingsDialog(self.Parent, self.account)
 		self.display_summary()
@@ -122,8 +133,14 @@ f"""اسم العميل: {self.account.name}
 		self.Parent.panels[0].Show()
 		self.Parent.panels[0].SetFocus()
 		account = Account(self.Parent.panels[0].accounts.GetClientData(self.Parent.panels[0].accounts.Selection))
-		total = account.total
-		total = round(total, 3) if total - int(total) != 0.0 else int(total)
-		self.Parent.panels[0].accounts.SetString(self.Parent.panels[0].accounts.Selection, f"{account.name}, المجموع {total} ريال")
+		self.Parent.panels[0].sort()
+		for n in range(self.Parent.panels[0].accounts.Count):
+			if self.Parent.panels[0].accounts.GetClientData(n) == account.id:
+				self.Parent.panels[0].accounts.Selection = n
+				break
+
+		#total = account.total
+		#total = round(total, 3) if total - int(total) != 0.0 else int(total)
+		#self.Parent.panels[0].accounts.SetString(self.Parent.panels[0].accounts.Selection, f"{account.name}, المجموع {total} ريال")
 		self.Destroy()
 		play("close")

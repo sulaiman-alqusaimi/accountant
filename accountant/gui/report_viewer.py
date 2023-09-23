@@ -44,19 +44,18 @@ class Report(wx.Dialog):
 				report += f"""اسم المنتج: {event.name}
 السعر: {event.price if event.price - int(event.price) != 0.0 else int(event.price)} ريال
 رقم الهاتف: {event.phone}
-التاريخ: {event.date.strftime("%d/%m/%Y %#I:%#M %p")}
+التاريخ: {event.date.strftime("%d/%m/%Y %I:%M %p")}
 
 """
 			elif type(event) == Payment:
 				report += "الحدث: دفع مبلغ\n"
 				report += f"""المبلغ المدفوع: {event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال
-التاريخ: {event.date.strftime("%d/%m/%Y %#I:%#M %p")}
-رقم الهاتف: {event.phone}
-
-"""
+التاريخ: {event.date.strftime("%d/%m/%Y %I:%M %p")}
+رقم الهاتف: {event.phone}"""
 				if event.notes:
 					report += f"ملاحظات الدفع: \n{event.notes}"
 				report += "\n\n"
+		report += "\n\n"
 		product_total = 0
 		for product in self.account.products:
 			product_total += product.price
@@ -147,7 +146,7 @@ f"""<h3>الحدث: منتج جديد</h3>
 
 <tr>
 <th>التاريخ</th>
-<td>{event.date.strftime("%d/%m/%Y %#I:%#M %p")}</td>
+<td>{event.date.strftime("%d/%m/%Y %I:%M %p")}</td>
 </tr>
 </table>
 <hr />
@@ -165,7 +164,7 @@ f"""
 
 <tr>
 <th>التاريخ</th>
-<td>{event.date.strftime("%d/%m/%Y %#I:%#M %p")}</td>
+<td>{event.date.strftime("%d/%m/%Y %I:%M %p")}</td>
 </tr>
 
 <tr>

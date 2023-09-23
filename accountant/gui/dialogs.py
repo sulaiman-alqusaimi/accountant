@@ -1,6 +1,6 @@
 import wx
 from utiles import get_events, play
-from database import add_account, Account, Product, Payment, Notification
+from database import add_account, get_account_by_id as Account, Product, Payment, Notification, session
 import pyperclip
 
 
@@ -108,6 +108,7 @@ class EditAccountDialog(AccountInfo):
 			self.new_name = account.name = self.accountName.Value
 		if self.phoneNumber.Value != self.phone:
 			account.phone = self.phoneNumber.Value
+		session.commit()
 		self.EndModal(self.__id)
 
 
@@ -120,28 +121,35 @@ class AddProduct(BaseProductDialog):
 	def onAdd(self, event):
 		if not self.validate():
 			return
-		p = Product(self.name.Value, float(self.price.Value), self.phone.Value)
+		p = Product(name=self.name.Value, price=float(self.price.Value), phone=self.phone.Value)
 		if self.account.maximum is not None and p.price + self.account.total > self.account.maximum:
 			play("limit")
 			wx.MessageBox(f"لقد تجاوزت سقف الحساب البالغ مقداره {self.account.maximum} ريالًا", "خطأ", wx.ICON_ERROR, self)
 			self.Destroy()
 			return
-		products = self.account.products
-		products.append(p)
-		self.account.products = products
+		p.account = self.account
+		session.add(p)
+		session.commit()
 		self.Destroy()
 		super().onAdd(None)
 		report = \
 f"""اسم المنتج: {p.name}
-التاريخ: {p.date.strftime("%d/%m/%Y %#I:%#M %p")}
+التاريخ: {p.date.strftime("%d/%m/%Y %I:%M %p")}
 رقم الهاتف: {p.phone}
-السعر: {p.price if p.price - int(p.price) != 0.0 else int(p.price)} ريال
+القيمة: {p.price if p.price - int(p.price) != 0.0 else int(p.price)} ريال
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
+"""
+		if self.account.maximum:
+			used = round(self.account.total/self.account.maximum, 2)
+			used = int(used*100)
+			if used >= 80:
+				report += f"""تنبيه:
+استهلكتم {used}% من سقف الحساب
 
 """
-		notifications = self.account.notifications
-		notifications.append(Notification("إضافة منتج", report))
-		self.account.notifications = notifications
+		n = Notification(title="إضافة منتج", body=report, account=self.account)
+		session.add(n)
+		session.commit()
 		SummaryDialog(wx.GetApp().GetTopWindow(), report)
 
 class EditProduct(BaseProductDialog):
@@ -165,21 +173,22 @@ class EditProduct(BaseProductDialog):
 		self.product.name = self.name.Value
 		self.product.price = float(self.price.Value)
 		self.product.phone = self.phone.Value
-		self.account.products = self.account.products
+		session.commit()
 		parent = self.Parent
 		self.Destroy()
 		super().onAdd()
 		report = \
 f"""اسم المنتج: {self.product.name}
-التاريخ: {self.product.date.strftime("%d/%m/%Y %#I:%#M %p")}
+التاريخ: {self.product.date.strftime("%d/%m/%Y %I:%M %p")}
 رقم الهاتف: {self.product.phone}
-السعر: {self.product.price if self.product.price - int(self.product.price) != 0.0 else int(self.product.price)} ريال
+القيمة: {self.product.price if self.product.price - int(self.product.price) != 0.0 else int(self.product.price)} ريال
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
 """
-		notifications = self.account.notifications
-		notifications.append(Notification("تحرير منتج", report))
-		self.account.notifications = notifications
+		n = Notification(title="تحرير منتج", body=report, account=self.account)
+		session.add(n)
+		session.commit()
+
 
 		SummaryDialog(parent, report)
 
@@ -190,26 +199,31 @@ class PayDialog(BasePaymentDialog):
 	def onPay(self, event):
 		if not self.validate():
 			return
-		payment = Payment(float(self.amount.Value), self.phone.Value, self.notes.Value)
-		payments = list(self.account.payments)
-		payments.append(payment)
-		self.account.payments = payments
-		self.account.update_total()
+		payment = Payment(amount=float(self.amount.Value), phone=self.phone.Value, notes=self.notes.Value)
+		payment.account = self.account
+		session.add(payment)
+		session.commit()
 		self.Destroy()
 		super().onPay()
 		previous = self.account.total + payment.amount
 
 		report = \
 f"""المبلغ المضاف: {payment.amount if payment.amount - int(payment.amount) != 0.0 else int(payment.amount)} ريال
-التاريخ: {payment.date.strftime("%d/%m/%Y %#I:%#M %p")}
+التاريخ: {payment.date.strftime("%d/%m/%Y %I:%M %p")}
 الحساب السابق: {round(previous, 3) if previous - int(previous) != 0.0 else int(previous)} ريال
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
+"""
+		if self.account.maximum:
+			used = round(self.account.total/self.account.maximum, 2)
+			used = int(used*100)
+			if used >= 80:
+				report += f"""تنبيه:
+استهلكتم {used}% من سقف الحساب
 
 """
-		notifications = self.account.notifications
-		notifications.append(Notification("دفع مبلغ", report))
-		self.account.notifications = notifications
-
+		n = Notification(title="دفع مبلغ", body=report, account=self.account)
+		session.add(n)
+		session.commit()
 		SummaryDialog(wx.GetApp().GetTopWindow(), report)
 
 class EditPaymentDialog(BasePaymentDialog):
@@ -225,7 +239,7 @@ class EditPaymentDialog(BasePaymentDialog):
 		self.payment.amount = float(self.amount.Value)
 		self.payment.phone = self.phone.Value
 		self.payment.notes = self.notes.Value
-		self.account.payments = self.account.payments
+		session.commit()
 		parent = self.Parent
 		self.Destroy()
 		super().onPay()
@@ -233,15 +247,14 @@ class EditPaymentDialog(BasePaymentDialog):
 
 		report = \
 f"""المبلغ المضاف: {self.payment.amount if self.payment.amount - int(self.payment.amount) != 0.0 else int(self.payment.amount)} ريال
-التاريخ: {self.payment.date.strftime("%d/%m/%Y %#I:%#M %p")}
+التاريخ: {self.payment.date.strftime("%d/%m/%Y %I:%M %p")}
 الحساب السابق: {round(previous, 3) if previous - int(previous) != 0.0 else int(previous)} ريال
 إجمالي الحساب: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
 
 """
-		notifications = self.account.notifications
-		notifications.append(Notification("تحرير مبلغ", report))
-		self.account.notifications = notifications
-
+		n = Notification(title="تحرير مبلغ", body=report, account=self.account)
+		session.add(n)
+		session.commit()
 		SummaryDialog(parent, report)
 
 
@@ -258,9 +271,9 @@ class EventsHistory(wx.Dialog):
 		events = get_events(self.account, True)
 		for event in events:
 			if type(event) == Product:
-				self.eventsBox.Append(f"المنتج: {event.name}. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {event.price if event.price - int(event.price) != 0.0 else int(event.price)} ريال", event)
+				self.eventsBox.Append(f"المنتج: {event.name}. بتاريخ {event.date.strftime('%d/%m/%Y %I:%M %p')}. القيمة {event.price if event.price - int(event.price) != 0.0 else int(event.price)} ريال", event)
 			elif type(event) == Payment:
-				self.eventsBox.Append(f"دفع مبلغ. القيمة {event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال. بتاريخ {event.date.strftime('%d/%m/%Y %#I:%#M %p')}", event)
+				self.eventsBox.Append(f"دفع مبلغ. القيمة {event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال. بتاريخ {event.date.strftime('%d/%m/%Y %I:%M %p')}", event)
 		self.editButton = wx.Button(p, -1, "تحرير...")
 		cancelButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
 		self.editButton.SetDefault()
@@ -277,10 +290,10 @@ class EventsHistory(wx.Dialog):
 		data = self.eventsBox.GetClientData(selection)
 		if type(data) == Product:
 			EditProduct(self, self.account, data)
-			self.eventsBox.SetString(selection, f"المنتج: {data.name}. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}. السعر {data.price if data.price - int(data.price) != 0.0 else int(data.price)} ريال")
+			self.eventsBox.SetString(selection, f"المنتج: {data.name}. بتاريخ {data.date.strftime('%d/%m/%Y %I:%M %p')}. القيمة {data.price if data.price - int(data.price) != 0.0 else int(data.price)} ريال")
 		elif type(data) == Payment:
 			EditPaymentDialog(self, self.account, data)
-			self.eventsBox.SetString(selection, f"دفع مبلغ. القيمة {data.amount if data.amount - int(data.amount) != 0.0 else int(data.amount)} ريال. بتاريخ {data.date.strftime('%d/%m/%Y %#I:%#M %p')}")
+			self.eventsBox.SetString(selection, f"دفع مبلغ. القيمة {data.amount if data.amount - int(data.amount) != 0.0 else int(data.amount)} ريال. بتاريخ {data.date.strftime('%d/%m/%Y %I:%M %p')}")
 
 	def contextSetup(self):
 		context = wx.Menu()
@@ -293,12 +306,8 @@ class EventsHistory(wx.Dialog):
 			selection = self.eventsBox.Selection
 			data = self.eventsBox.GetClientData(selection)
 			self.eventsBox.Delete(selection)
-			if type(data) == Product:
-				self.account.products.remove(data)
-				self.account.products = self.account.products
-			else:
-				self.account.payments.remove(data)
-				self.account.payments = self.account.payments
+			session.delete(data)
+			session.commit()
 			self.editButton.Enabled = self.eventsBox.Count > 0
 
 	def onHook(self, event):
@@ -338,10 +347,10 @@ class ResultsDialog(wx.Dialog):
 		wx.StaticText(p, -1, "قائمة العملاء: ")
 		self.results = wx.ListBox(p, -1)
 		for account in accounts:
-			total = Account(account[0]).total
+			total = account.total
 			total = round(total, 3) if total - int(total) != 0.0 else int(total)
 
-			self.results.Append(f"{account[1]}, المجموع {total} ريال", account)
+			self.results.Append(f"{account.name}, المجموع {total} ريال", account)
 		self.results.Selection = 0
 		openButton = wx.Button(p, -1, "اذهب")
 		openButton.SetDefault()
@@ -421,6 +430,7 @@ class AccountSettingsDialog(wx.Dialog):
 		self.account.maximum = maximum
 		if self.account.notes != self.notes.Value:
 			self.account.notes = self.notes.Value
+		session.commit()
 		self.Destroy()
 
 
@@ -481,9 +491,8 @@ class NotificationDialog(wx.Dialog):
 		selection = self.notifications.Selection
 		notification = self.notifications.GetClientData(selection)
 		self.notifications.Delete(selection)
-		notifications = self.account.notifications
-		notifications.remove(notification)
-		self.account.notifications = notifications
+		session.delete(notification)
+		session.commit()
 		self.notifications.Selection = selection -1
 		self.notifications.SetFocus()
 		self.toggleControls()
@@ -491,7 +500,10 @@ class NotificationDialog(wx.Dialog):
 	def onClear(self, event):
 		if wx.MessageBox("هل أنت متأكد من رغبتك في إفراغ جميع الإشعارات لهذا الحساب؟", "إفراغ", wx.YES_NO, self) == wx.YES:
 			self.notifications.Clear()
-			self.account.notifications = []
+			notifications = session.query(Notification).filter_by(account=self.account)
+			for n in notifications:
+				session.delete(n)
+			session.commit()
 			self.toggleControls()
 		self.notifications.SetFocus()
 

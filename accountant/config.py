@@ -5,7 +5,8 @@ import configparser
 
 
 defaults = {
-	
+	"sort_by": 0,
+	"direction": 0,
 }
 
 def initialize():
@@ -33,7 +34,7 @@ def string_to_bool(string):
 
 def config_get(string):
 	config = configparser.ConfigParser()
-	config.read(os.path.join(settings_path, "settings.ini"))
+	config.read(paths.settings_path)
 	try:
 		value = config["settings"][string]
 		return string_to_bool(value)
@@ -44,8 +45,8 @@ def config_get(string):
 
 def config_set(key, value):
 	config = configparser.ConfigParser()
-	config.read(os.path.join(settings_path, "settings.ini"))
+	config.read(paths.settings_path)
 	config["settings"][key] = str(value)
-	with open(os.path.join(settings_path, "settings.ini"), "w") as file:
+	with open(paths.settings_path, "w") as file:
 		config.write(file)
 
