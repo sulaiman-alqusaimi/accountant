@@ -1,13 +1,13 @@
 from .components import BaseFrame
 import wx
 import application
-from .dialogs import NewAccountDialog, EditAccountDialog, ResultsDialog, SearchDialog
+from .dialogs import NewAccountDialog, EditAccountDialog, ResultsDialog, SearchDialog, EventSearchDialog, EventsHistory
 from database import get_accounts, delete_account, get_account_by_id as Account
 from .account import AccountViewer
 from utiles import check_for_updates, play
 from config import config_get, config_set
 from threading import Thread
-
+from .settings import SettingsDialog
 
 
 
@@ -85,13 +85,17 @@ class MainPanel(wx.Panel):
 		addButton.Bind(wx.EVT_BUTTON, self.onAdd)
 		searchButton = wx.Button(self, -1, "بحث...")
 		searchButton.Bind(wx.EVT_BUTTON, self.onSearch)
+		search_event_button = wx.Button(self, -1, "البحث عن عملية...")
+		search_event_button.Bind(wx.EVT_BUTTON, self.onSearchEvent)
 		self.sortBy.Bind(wx.EVT_CHOICE, self.onSort)
 		self.directionBox.Bind(wx.EVT_RADIOBOX, self.onDirection)
 		sizer.Add(addButton)
 		sizer.Add(searchButton)
+		sizer.Add(search_event_button)
 		hotkeys = wx.AcceleratorTable([
 			(wx.ACCEL_CTRL, ord("N"), wx.ID_ADD),
-			(wx.ACCEL_CTRL, ord("F"), searchButton.GetId())
+			(wx.ACCEL_CTRL, ord("F"), searchButton.GetId()),
+			(wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("F"), search_event_button.GetId()),
 		])
 		self.SetAcceleratorTable(hotkeys)
 		self.SetSizer(sizer)
@@ -160,6 +164,10 @@ class MainPanel(wx.Panel):
 
 					self.accounts.Selection = position
 					self.accounts.onOpen(None)
+	def onSearchEvent(self, event):
+		with EventSearchDialog(self) as dlg:
+			if dlg.ShowModal() == wx.ID_OK:
+				EventsHistory(self, events=dlg.events)
 
 
 class MainWindow(BaseFrame):
@@ -172,12 +180,17 @@ class MainWindow(BaseFrame):
 		self.panels = {0: MainPanel(self)}
 		menubar = wx.MenuBar()
 		mainMenu = wx.Menu()
+		settings = mainMenu.Append(-1, "الإعدادات...")
 		exitItem = mainMenu.Append(-1, "خروج")
 		menubar.Append(mainMenu, "القائمة الرئيسية")
 		self.SetMenuBar(menubar)
+		self.Bind(wx.EVT_MENU, self.onSettings, settings)
 		self.Bind(wx.EVT_MENU, lambda e: wx.Exit(), exitItem)
 		self.Show()
 		t = Thread(target=check_for_updates, args=[True])
 		t.daemon = True
 		t.start()
-
+	def onSettings(self, event):
+		with SettingsDialog(self) as dlg:
+			if dlg.ShowModal() == wx.ID_OK:
+				config_set("default_path", dlg.path_ctrl.Value)

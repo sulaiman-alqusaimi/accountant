@@ -1,8 +1,9 @@
 import wx
-from utiles import get_events, play
+from utiles import get_events, play, save_html_receet, save_pdf_receet
 from database import add_account, get_account_by_id as Account, Product, Payment, Notification, session
 import pyperclip
-
+import subprocess
+import os 
 
 class AccountInfo(wx.Dialog):
 	def __init__(self, *args, **kwargs):
@@ -150,7 +151,7 @@ f"""اسم المنتج: {p.name}
 		n = Notification(title="إضافة منتج", body=report, account=self.account)
 		session.add(n)
 		session.commit()
-		SummaryDialog(wx.GetApp().GetTopWindow(), report)
+		SummaryDialog(wx.GetApp().GetTopWindow(), report, p)
 
 class EditProduct(BaseProductDialog):
 	def __init__(self, parent, account, product):
@@ -190,7 +191,7 @@ f"""اسم المنتج: {self.product.name}
 		session.commit()
 
 
-		SummaryDialog(parent, report)
+		SummaryDialog(parent, report, self.product)
 
 class PayDialog(BasePaymentDialog):
 	def __init__(self, parent, account):
@@ -224,7 +225,7 @@ f"""المبلغ المضاف: {payment.amount if payment.amount - int(payment.a
 		n = Notification(title="دفع مبلغ", body=report, account=self.account)
 		session.add(n)
 		session.commit()
-		SummaryDialog(wx.GetApp().GetTopWindow(), report)
+		SummaryDialog(wx.GetApp().GetTopWindow(), report, payment)
 
 class EditPaymentDialog(BasePaymentDialog):
 	def __init__(self, parent, account, payment):
@@ -255,52 +256,84 @@ f"""المبلغ المضاف: {self.payment.amount if self.payment.amount - int
 		n = Notification(title="تحرير مبلغ", body=report, account=self.account)
 		session.add(n)
 		session.commit()
-		SummaryDialog(parent, report)
+		SummaryDialog(parent, report, self.payment)
 
 
 
 
 class EventsHistory(wx.Dialog):
-	def __init__(self,parent, account):
+	def __init__(self,parent, account=None, events=None):
 		super().__init__(parent, title="تحرير العمليات")
 		self.account = account
 		self.CenterOnParent()
 		p = wx.Panel(self)
 		wx.StaticText(p, -1, "قائمة العمليات: ")
 		self.eventsBox = wx.ListBox(p, -1)
-		events = get_events(self.account, True)
+		if account:
+			events = get_events(self.account, True)
+		else:
+			self.Title = "العمليات"
+			
 		for event in events:
 			if type(event) == Product:
 				self.eventsBox.Append(f"المنتج: {event.name}. بتاريخ {event.date.strftime('%d/%m/%Y %I:%M %p')}. القيمة {event.price if event.price - int(event.price) != 0.0 else int(event.price)} ريال", event)
+					
 			elif type(event) == Payment:
 				self.eventsBox.Append(f"دفع مبلغ. القيمة {event.amount if event.amount - int(event.amount) != 0.0 else int(event.amount)} ريال. بتاريخ {event.date.strftime('%d/%m/%Y %I:%M %p')}", event)
 		self.editButton = wx.Button(p, -1, "تحرير...")
+		if not account:
+			open_account_button = wx.Button(p, -1, "فتح الحساب")
+			open_account_button.Bind(wx.EVT_BUTTON, self.onOpen)
+			open_account_button.SetDefault()
+		else:
+			
+			self.editButton.SetDefault()
+
 		cancelButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
-		self.editButton.SetDefault()
 		self.editButton.Bind(wx.EVT_BUTTON, self.onEdit)
 		if self.eventsBox.Count > 0:
 			self.eventsBox.Selection = 0
 		else:
+
 			self.editButton.Enabled = False
 		self.contextSetup()
 		self.eventsBox.Bind(wx.EVT_CHAR_HOOK, self.onHook)
 		self.Show()
+	def onOpen(self, event):
+		from .account import AccountViewer
+		selection = self.eventsBox.Selection
+		account = self.eventsBox.GetClientData(selection).account
+		self.Parent.Hide()
+		viewer = AccountViewer(wx.GetApp().GetTopWindow(), account)
+		play("open")
+		self.EndModal(wx.ID_CANCEL)
 	def onEdit(self, event):
 		selection = self.eventsBox.Selection
 		data = self.eventsBox.GetClientData(selection)
+		account = data.account
 		if type(data) == Product:
-			EditProduct(self, self.account, data)
+			EditProduct(self, account, data)
 			self.eventsBox.SetString(selection, f"المنتج: {data.name}. بتاريخ {data.date.strftime('%d/%m/%Y %I:%M %p')}. القيمة {data.price if data.price - int(data.price) != 0.0 else int(data.price)} ريال")
 		elif type(data) == Payment:
-			EditPaymentDialog(self, self.account, data)
+
+			EditPaymentDialog(self, account, data)
 			self.eventsBox.SetString(selection, f"دفع مبلغ. القيمة {data.amount if data.amount - int(data.amount) != 0.0 else int(data.amount)} ريال. بتاريخ {data.date.strftime('%d/%m/%Y %I:%M %p')}")
 
 	def contextSetup(self):
 		context = wx.Menu()
 		deleteItem = context.Append(-1, "حذف العملية")
+		html = context.Append(-1, "استخراج الإيصال بصيغة HTML")
+		pdf = context.Append(-1, "استخراج الإيصال بصيغة PDF")
 		self.Bind(wx.EVT_MENU, self.onDelete, deleteItem)
+		self.Bind(wx.EVT_MENU, self.onHtml, html)
+		self.Bind(wx.EVT_MENU, self.onPdf, pdf)
 		self.eventsBox.Bind(wx.EVT_CONTEXT_MENU, lambda e: self.eventsBox.PopupMenu(context) if self.eventsBox.Selection != -1 else None)
-
+	def onPdf(self, event):
+		selection = self.eventsBox.GetClientData(self.eventsBox.Selection)
+		res = save_pdf_receet(selection)
+		if wx.MessageBox(f"تم استخراج الإيصال إلى المسار المحدد. هل تريد عرض الملف في الموقع المحفوظ؟", "نجاح", wx.YES_NO, parent=self) == wx.YES:
+			subprocess.run(f"""explorer /select,"{res}" """)
+		
 	def onDelete(self, event):
 		if wx.MessageBox("أمتأكد من رغبتك في حذف العملية المحددة؟", "حذف", style=wx.YES_NO, parent=self) == wx.YES:
 			selection = self.eventsBox.Selection
@@ -309,7 +342,14 @@ class EventsHistory(wx.Dialog):
 			session.delete(data)
 			session.commit()
 			self.editButton.Enabled = self.eventsBox.Count > 0
+	def onHtml(self, event):
+		selection = self.eventsBox.GetClientData(self.eventsBox.Selection)
+		
+		res = save_html_receet(selection)
+		if wx.MessageBox(f"تم استخراج الإيصال إلى المسار المحدد. هل تريد عرض الملف في الموقع المحفوظ؟", "نجاح", wx.YES_NO, parent=self) == wx.YES:
+			subprocess.run(f"""explorer /select,"{res}" """)
 
+		
 	def onHook(self, event):
 		if event.KeyCode in (wx.WXK_DELETE, wx.WXK_NUMPAD_DELETE) and self.eventsBox.Selection != -1:
 			self.onDelete(None)
@@ -435,21 +475,39 @@ class AccountSettingsDialog(wx.Dialog):
 
 
 class SummaryDialog(wx.Dialog):
-	def __init__(self, parent, summary):
+	def __init__(self, parent, summary, data=None):
 		super().__init__(parent, title="ملخص العملية")
+		self.data = data
 		self.CenterOnParent()
 		p = wx.Panel(self)
 		lbl = wx.StaticText(p, -1, "محتوى الملخص")
 		self.summaryBox = wx.TextCtrl(p, -1, value=summary, style=wx.TE_MULTILINE + wx.TE_READONLY + wx.HSCROLL)
 		copyButton = wx.Button(p, -1, "نسخ")
 		copyButton.Bind(wx.EVT_BUTTON, self.onCopy)
+		if self.data:
+			export_pdf = wx.Button(p, -1, "التصدير بصيغة pdf...")
+			export_pdf.Bind(wx.EVT_BUTTON, self.onPdf)
+			export_html = wx.Button(p, -1, "التصدير بصيغة HTML...")
+			export_html.Bind(wx.EVT_BUTTON, self.onHtml)
+
 		closeButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
 
 		self.ShowModal()
+
 	def onCopy(self, event):
 		pyperclip.copy(self.summaryBox.Value)
 		self.summaryBox.SetFocus()
+	def onHtml(self, event):
+		res = save_html_receet(self.data)
+		if wx.MessageBox(f"تم استخراج الإيصال إلى المسار المحدد. هل تريد عرض الملف في الموقع المحفوظ؟", "نجاح", wx.YES_NO, parent=self) == wx.YES:
+			subprocess.run(f"""explorer /select,"{res}" """)
 
+	def onPdf(self, event):
+		res = save_pdf_receet(self.data)
+		if wx.MessageBox(f"تم استخراج الإيصال إلى المسار المحدد. هل تريد عرض الملف في الموقع المحفوظ؟", "نجاح", wx.YES_NO, parent=self) == wx.YES:
+			subprocess.run(f"""explorer /select,"{res}" """)
+
+			
 def has_items(function):
 	def rapper(self, event=None):
 		if self.notifications.Count > 0 and self.notifications.Selection != -1:
@@ -512,3 +570,36 @@ class NotificationDialog(wx.Dialog):
 			self.onDelete(None)
 		else:
 			event.Skip()
+
+
+class EventSearchDialog(wx.Dialog):
+	def __init__(self, parent):
+		super().__init__(parent, title="بحث")
+		self.result = None
+		p = wx.Panel(self)
+		wx.StaticText(p, -1, "رقم الهاتف: ")
+		self.phone = wx.TextCtrl(p, -1)
+		self.products_check = wx.CheckBox(p, -1, "تضمين المنتجات")
+		self.payments_check = wx.CheckBox(p, -1, "تضمين المدفوعات")
+		self.products_check.Value = self.payments_check.Value = True
+		self.searchButton = wx.Button(p, -1, "بحث")
+		self.searchButton.SetDefault()
+		self.searchButton.Enabled = False
+		cancelButton = wx.Button(p, wx.ID_CANCEL, "إغلاق")
+		self.searchButton.Bind(wx.EVT_BUTTON, self.onSearch)
+		self.phone.Bind(wx.EVT_TEXT, self.onChange)
+	def onSearch(self, event):
+		self.events = []
+		products = session.query(Product).filter(Product.phone == self.phone.Value) if self.products_check.Value else None
+		if products:
+			self.events.extend(list(products))
+		payments = session.query(Payment).filter(Payment.phone == self.phone.Value) if self.payments_check.Value else None
+		if payments:
+			self.events.extend(list(payments))
+		if self.events:
+			self.events = sorted(self.events, key=lambda e: e.date, reverse=True)
+			self.EndModal(wx.ID_OK)
+		else:
+			wx.MessageBox("لم يتم العثور على أية عمليات مرتبطة بالرقم المحدد", "خطأ", wx.ICON_ERROR)
+	def onChange(self, event):
+		self.searchButton.Enabled = self.phone != ""

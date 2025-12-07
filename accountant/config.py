@@ -7,6 +7,7 @@ import configparser
 defaults = {
 	"sort_by": 0,
 	"direction": 0,
+	"default_path": os.path.join(os.getenv("userprofile"), "documents", "المحاسب الشخصي"),
 }
 
 def initialize():
@@ -20,7 +21,7 @@ def initialize():
 		config.add_section("settings")
 		for key, value in defaults.items():
 			config["settings"][key] = str(value)
-		with open(paths.settings_path, "w") as file:
+		with open(paths.settings_path, "w", encoding="utf-8") as file:
 			config.write(file)
 
 def string_to_bool(string):
