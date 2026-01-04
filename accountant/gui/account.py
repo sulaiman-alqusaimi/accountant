@@ -2,12 +2,13 @@
 import wx
 from database import get_account_by_id as Account
 
-from utiles import play
+from utiles import play, format_number
 from .components import BaseFrame
 import application
-from .dialogs import AddProduct, PayDialog, EventsHistory, AccountSettingsDialog, NotificationDialog
+from .dialogs import AddProduct, PayDialog, EventsHistory, AccountSettingsDialog, NotificationDialog, AccountInfo
 from .report_viewer import Report
 from database import Product, Payment, Notification, session
+from nvda_client.client import speak
 
 
 class AccountViewer(wx.Panel):
@@ -17,8 +18,10 @@ class AccountViewer(wx.Panel):
 		super().__init__(parent)
 		wx.StaticText(self, -1, "المعلومات الأساسية:")
 		self.summary = wx.TextCtrl(self, -1, style=wx.TE_READONLY + wx.TE_MULTILINE + wx.HSCROLL)
-		settingsButton = wx.Button(self, -1, "إعدادات الحساب...")
-		settingsButton.Bind(wx.EVT_BUTTON, self.onSettings)
+		info_button = wx.Button(self, -1, "معلومات الحساب")
+		info_button.Bind(wx.EVT_BUTTON, self.on_info)
+		# settingsButton = wx.Button(self, -1, "إعدادات الحساب...")
+		# settingsButton.Bind(wx.EVT_BUTTON, self.onSettings)
 		self.addButton = wx.Button(self, -1, "إضافة منتج...")
 		self.addButton.Enabled = self.account.active
 		self.addButton.Bind(wx.EVT_BUTTON, self.onAdd)
@@ -34,21 +37,29 @@ class AccountViewer(wx.Panel):
 		clearButton.Bind(wx.EVT_BUTTON, self.onClear)
 		backButton = wx.Button(self, -1, "رجوع")
 		backButton.Bind(wx.EVT_BUTTON, self.onBack)
+		name_id = wx.NewId()
+		total_id = wx.NewId()
+		active_id = wx.NewId()
+		maximum_id = wx.NewId()
 		hotkeys = wx.AcceleratorTable([
-			(wx.ACCEL_ALT, ord("S"), settingsButton.GetId()),
+			(wx.ACCEL_ALT, ord("I"), info_button.GetId()),
 			(wx.ACCEL_ALT, ord("A"), self.addButton.GetId()),
 			(wx.ACCEL_ALT, ord("P"), payButton.GetId()),
 			(wx.ACCEL_ALT, ord("T"), notificationsButton.GetId()),
 			(wx.ACCEL_ALT, ord("E"), eventsButton.GetId()),
 			(wx.ACCEL_ALT, ord("R"), reportButton.GetId()),
-			(wx.ACCEL_ALT, ord("C"), clearButton.GetId())
+			(wx.ACCEL_ALT, ord("C"), clearButton.GetId()),
+			(wx.ACCEL_ALT, ord("1"), name_id),
+			(wx.ACCEL_ALT, ord("2"), total_id),
+			(wx.ACCEL_ALT, ord("3"), active_id),
+			(wx.ACCEL_ALT, ord("4"), maximum_id),
 ])
 		self.SetAcceleratorTable(hotkeys)
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		sizer.Add(backButton, 1)
 		sizer.Add(self.summary, 1, wx.EXPAND)
 		sizer1 = wx.BoxSizer(wx.HORIZONTAL)
-		sizer1.Add(settingsButton, 1)
+		sizer1.Add(info_button, 1)
 		sizer1.Add(self.addButton, 1)
 		sizer1.Add(payButton, 1)
 		sizer1.Add(eventsButton, 1)
@@ -58,6 +69,10 @@ class AccountViewer(wx.Panel):
 		sizer.Add(sizer1, 1, wx.EXPAND)
 		self.SetSizer(sizer)
 		self.Bind(wx.EVT_CHAR_HOOK, self.onHook)
+		self.Bind(wx.EVT_MENU, self.on_name, id=name_id)
+		self.Bind(wx.EVT_MENU, self.on_total, id=total_id)
+		self.Bind(wx.EVT_MENU, self.on_active, id=active_id)
+		self.Bind(wx.EVT_MENU, self.on_maximum, id=maximum_id)
 		self.summary.Bind(wx.EVT_SET_FOCUS, self.onFocus)
 		self.display_summary()
 		self.Parent.panels[1] = self
@@ -65,7 +80,21 @@ class AccountViewer(wx.Panel):
 		self.Layout()
 		self.Parent.Sizer.Fit(self)
 		self.summary.SetFocus()
-
+	def on_name(self, event):
+		speak(f"اسم العميل: {self.account.name}")
+	def on_total(self, event):
+		speak(f"إجمالي الحساب: {format_number(self.account.total)} ريال")
+	def on_active(self, event):
+		speak(f"حالة الحساب: {'نشط' if self.account.active else 'غير نشط'}")
+	def on_maximum(self, event):
+		if self.account.maximum:
+			speak(f"سقف الحساب: {format_number(self.account.maximum)} ريال")
+		else:
+			speak("لا يوجد سقف للحساب")
+	def on_info(self, event):
+		with AccountInfo(self, self.account) as dlg:
+			dlg.ShowModal()
+	
 	def onAdd(self, event):
 		if not self.account.active:
 			return

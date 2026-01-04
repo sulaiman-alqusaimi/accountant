@@ -1,7 +1,7 @@
 from .components import BaseFrame
 import wx
 import application
-from .dialogs import NewAccountDialog, EditAccountDialog, ResultsDialog, SearchDialog, EventSearchDialog, EventsHistory
+from .dialogs import NewAccountDialog, EditAccountDialog, ResultsDialog, SearchDialog, EventSearchDialog, EventsHistory, AccountInfo
 from database import get_accounts, delete_account, get_account_by_id as Account
 from .account import AccountViewer
 from utiles import check_for_updates, play
@@ -45,11 +45,11 @@ class ListBox(wx.ListBox):
 	def edit(self, event):
 		account_id = self.GetClientData(self.Selection)
 		account = Account(account_id)
-		with EditAccountDialog(wx.GetTopLevelParent(self), account.name, account.phone, account_id) as dlg:
-			res = dlg.ShowModal()
-		if not res == account_id:
-			return
-		if hasattr(dlg, "new_name"):
+		old_name = account.name
+		with AccountInfo(wx.GetTopLevelParent(self), account) as dlg:
+			dlg.ShowModal()
+
+		if account.name != old_name:
 			self.Parent.sort()
 			for n in range(self.Count):
 				if self.GetClientData(n) == account_id:
@@ -150,7 +150,7 @@ class MainPanel(wx.Panel):
 		if dlg.result:
 			results = []
 			for account in get_accounts():
-				if dlg.result in account.name:
+				if dlg.result in account.name or dlg.result in account.phone:
 					results.append(account)
 			if not results:
 				wx.MessageBox("لم يتم العثور على العميل المطلوب", "خطأ", wx.ICON_ERROR, self.Parent)

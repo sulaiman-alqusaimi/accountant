@@ -1,9 +1,10 @@
 import wx
-from utiles import get_events, play, save_html_receet, save_pdf_receet
+from utiles import get_events, play, save_html_receet, save_pdf_receet, format_number
 from database import add_account, get_account_by_id as Account, Product, Payment, Notification, session
 import pyperclip
 import subprocess
 import os 
+from .settings import TextSettingsDialog, AccountMaximumSettingsDialog
 
 class AccountInfo(wx.Dialog):
 	def __init__(self, *args, **kwargs):
@@ -361,7 +362,7 @@ class SearchDialog(wx.Dialog):
 		super().__init__(parent, title="بحث")
 		self.result = None
 		p = wx.Panel(self)
-		wx.StaticText(p, -1, "اسم العميل: ")
+		wx.StaticText(p, -1, "اسم أو رقم العميل: ")
 		self.name = wx.TextCtrl(p, -1)
 		self.searchButton = wx.Button(p, -1, "بحث")
 		self.searchButton.SetDefault()
@@ -603,3 +604,127 @@ class EventSearchDialog(wx.Dialog):
 			wx.MessageBox("لم يتم العثور على أية عمليات مرتبطة بالرقم المحدد", "خطأ", wx.ICON_ERROR)
 	def onChange(self, event):
 		self.searchButton.Enabled = self.phone != ""
+
+
+class AccountInfo(wx.Dialog):
+	def __init__(self, parent, account):
+		super().__init__(parent, title="معلومات الحساب", size=(600, 600))
+		self.account = account
+		main_sizer = wx.BoxSizer(wx.VERTICAL)
+
+		grid = wx.FlexGridSizer(rows=5, cols=3, hgap=10, vgap=10)
+		grid.AddGrowableCol(1, 1)
+
+		# ===== اسم العميل =====
+		lbl_name = wx.StaticText(self, label="اسم العميل")
+		self.txt_name = wx.TextCtrl(
+			self,
+			value=account.name,
+			style=wx.TE_READONLY | wx.TE_MULTILINE
+		)
+		btn_edit_name = wx.Button(self, label="تعديل")
+
+		grid.Add(lbl_name)
+		grid.Add(self.txt_name, 1, wx.EXPAND)
+		grid.Add(btn_edit_name)
+
+		lbl_phone = wx.StaticText(self, label="رقم الهاتف")
+		self.txt_phone = wx.TextCtrl(
+			self,
+			value=account.phone,
+			style=wx.TE_READONLY | wx.TE_MULTILINE
+		)
+		btn_edit_phone = wx.Button(self, label="تعديل")
+
+		grid.Add(lbl_phone)
+		grid.Add(self.txt_phone, 1, wx.EXPAND)
+		grid.Add(btn_edit_phone)
+
+		lbl_status = wx.StaticText(self, label="حالة الحساب")
+
+		status_box = wx.StaticBox(self, label="حالة الحساب")
+		status_sizer = wx.StaticBoxSizer(status_box, wx.VERTICAL)
+
+		self.chk_active = wx.CheckBox(status_box, label="نشط")
+		self.chk_active.SetValue(account.active)
+		status_sizer.Add(self.chk_active, 0, wx.ALL, 5)
+
+		grid.Add(lbl_status)
+		grid.Add(status_sizer, 1, wx.EXPAND)
+		grid.Add((0, 0))  # عنصر فارغ بدل زر التعديل
+
+		lbl_limit = wx.StaticText(self, label="سقف الحساب")
+		self.txt_limit = wx.TextCtrl(
+			self,
+			style=wx.TE_READONLY | wx.TE_MULTILINE
+		)
+		btn_edit_limit = wx.Button(self, label="تعديل")
+		self.process_limit()
+		grid.Add(lbl_limit)
+		grid.Add(self.txt_limit, 1, wx.EXPAND)
+		grid.Add(btn_edit_limit)
+
+		lbl_notes = wx.StaticText(self, label="ملاحظات")
+		self.txt_notes = wx.TextCtrl(
+			self,
+			value=account.notes,
+			style=wx.TE_READONLY | wx.TE_MULTILINE
+		)
+		btn_edit_notes = wx.Button(self, label="تعديل")
+
+		grid.Add(lbl_notes)
+		grid.Add(self.txt_notes, 1, wx.EXPAND)
+		grid.Add(btn_edit_notes)
+
+		main_sizer.Add(grid, 1, wx.ALL | wx.EXPAND, 15)
+
+		btn_close = wx.Button(self, wx.ID_OK, label="إغلاق")
+		btn_close.SetDefault()
+		main_sizer.Add(btn_close, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+		btn_edit_name.Bind(wx.EVT_BUTTON, self.on_edit_name)
+		btn_edit_phone.Bind(wx.EVT_BUTTON, self.on_edit_phone)
+		self.chk_active.Bind(wx.EVT_CHECKBOX, self.on_active)
+		btn_edit_limit.Bind(wx.EVT_BUTTON, self.on_edit_limit)
+		btn_edit_notes.Bind(wx.EVT_BUTTON, self.on_edit_notes)
+		self.SetSizer(main_sizer)
+		self.Layout()
+		self.CentreOnParent()
+	def on_edit_name(self, event):
+		with TextSettingsDialog(self, "تعديل اسم العميل", "اسم العميل", self.account, "name") as dlg:
+			c = dlg.ShowModal()
+			if c:
+				self.account.name = dlg.res
+				session.commit()
+				self.txt_name.Value = self.account.name
+			self.txt_name.SetFocus()
+	def on_edit_phone(self, event):
+		with TextSettingsDialog(self, "تعديل رقم الهاتف", "رقم الهاتف", self.account, "phone") as dlg:
+			c = dlg.ShowModal()
+			if c:
+				self.account.phone = dlg.res
+				session.commit()
+				self.txt_phone.Value = self.account.phone
+			self.txt_phone.SetFocus()
+	def on_edit_notes(self, event):
+		with TextSettingsDialog(self, "تعديل ملاحظات الحساب", "ملاحظات الحساب", self.account, "notes", True) as dlg:
+			c = dlg.ShowModal()
+			if c:
+				self.account.notes = dlg.res
+				session.commit()
+				self.txt_notes.Value = self.account.notes
+			self.txt_notes.SetFocus()
+	def on_edit_limit(self, event):
+		with AccountMaximumSettingsDialog(self, self.account) as dlg:
+			if dlg.ShowModal() == wx.ID_SAVE:
+				self.account.maximum = dlg.maximum
+				session.commit()
+				self.process_limit()
+		self.txt_limit.SetFocus()
+	def process_limit(self):
+		if self.account.maximum is None:
+			self.txt_limit.Value = "بلا سقف"
+		else:
+			self.txt_limit.Value = str(format_number(self.account.maximum))
+	def on_active(self, event):
+		self.account.active = self.chk_active.Value
+		session.commit()
