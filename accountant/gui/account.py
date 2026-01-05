@@ -88,7 +88,7 @@ class AccountViewer(wx.Panel):
 		speak(f"حالة الحساب: {'نشط' if self.account.active else 'غير نشط'}")
 	def on_maximum(self, event):
 		if self.account.maximum:
-			speak(f"سقف الحساب: {format_number(self.account.maximum)} ريال")
+			speak(f"تم استهلاك {int((self.account.total / self.account.maximum) *100)} بالمئة من سقف الحساب المحدد بمقدار {format_number(self.account.maximum)} ريالًا")
 		else:
 			speak("لا يوجد سقف للحساب")
 	def on_info(self, event):
@@ -114,16 +114,13 @@ class AccountViewer(wx.Panel):
 			notes = ""
 
 		summary = f"""اسم العميل: {self.account.name}
-رقم الهاتف: {self.account.phone}
 الحساب الإجمالي: {round(self.account.total, 3) if self.account.total - int(self.account.total) != 0.0 else int(self.account.total)} ريال
-حالة الحساب: {status}
-سقف الحساب: {maximum}
 """
 		if self.account.maximum:
 			used = round(self.account.total/self.account.maximum, 2)
 			used = int(used*100)
+			summary += f"سقف الحساب: {maximum}\n"
 			summary += f"معدل الاستهلاك: {used}%\n"
-		summary += f"{notes}\n"
 		self.summary.SetValue(summary)
 	def onHook(self, event):
 		if event.KeyCode == wx.WXK_ESCAPE:
